@@ -1,0 +1,8 @@
+*.tflite
+*.h5
+*.task
+*.pyc
+.vscode/
+__pycache__/
+alembic/
+compose.yaml
