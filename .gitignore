@@ -1,6 +1,4 @@
 *.tflite
-*.h5
-*.task
 *.pyc
 .vscode/
 __pycache__/
