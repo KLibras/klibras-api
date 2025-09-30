@@ -57,7 +57,7 @@ async def register(
         logger.error("A criação de usuário falhou inesperadamente para %s.", user_in.email)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Falha ao criar usuário.")
     
-    background_tasks.add_task(user_service.run_welcome_email_task, str(usuario.email))
+    # background_tasks.add_task(user_service.run_welcome_email_task, str(usuario.email))
 
     logger.info("Usuário %s registrado com sucesso. E-mail de boas-vindas na fila.", usuario.email)
     return usuario
@@ -103,7 +103,7 @@ async def refresh_token(
     refresh_token: str = Body(..., embed=True),
 ):
     """
-    Emite um novo token de acesso usando um token de atualizaÃ§Ã£o vÃ¡lido.
+    Emite um novo token de acesso usando um token de atualização válido.
     """
     if not refresh_token:
         raise HTTPException(

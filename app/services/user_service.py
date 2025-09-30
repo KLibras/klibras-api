@@ -9,7 +9,7 @@ from fastapi import HTTPException, status
 from app.models.user import User
 from app.schemas.user import UserCreate
 from app.core.security import get_password_hash, verify_password
-from app.services.smtp_service import send_welcome_email
+# from app.services.smtp_service import send_welcome_email
 
 logger = logging.getLogger(__name__)
 
@@ -95,8 +95,7 @@ async def get_users_leaderboard(db:AsyncSession) -> List[User]:
 
 
 
-async def run_welcome_email_task(user_email: str):
-    """Wrapper pra rodar a tarefa de mandar o email em segundo plano"""
-    await send_welcome_email(user_email=user_email)
-    logger.info("Email de boas-vindas enviado para %s", user_email)
-
+#async def run_welcome_email_task(user_email: str):
+ #   """Wrapper pra rodar a tarefa de mandar o email em segundo plano"""
+  #  await send_welcome_email(user_email=user_email)
+   # logger.info("Email de boas-vindas enviado para %s", user_email)
