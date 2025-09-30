@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import user #, recognition
+from app.routers import user , recognition
 from app.db.database_connection import engine, Base
 from app.core.config import settings
 import logging
@@ -40,7 +40,7 @@ logger.info("Router de users incluído")
 
 # Inclue o router do reconhecimento de sinais
 
-#app.include_router(recognition.router, prefix="/action", tags=["Action Recognition"])
-#logger.info("Action recognition router included")
+app.include_router(recognition.router, prefix="/action", tags=["Action Recognition"])
+logger.info("Action recognition router included")
 
 
