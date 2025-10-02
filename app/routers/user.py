@@ -12,16 +12,22 @@ from fastapi import (
 )
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
+from pydantic import BaseModel
+
+# Imports para a autenticação com Google
+from google.oauth2 import id_token
+from google.auth.transport import requests
 
 from app.services import user_service
 from app.schemas.user import UserCreate, UserRead
 from app.schemas.token import Token
-from app.dependencies import get_current_user, get_db 
+from app.dependencies import get_current_user, get_db
 from app.core.security import (
     create_access_token,
     create_refresh_token,
     get_subject_from_token,
 )
+# Importa as configurações centralizadas
 from app.core.config import settings
 from app.models.user import User
 
@@ -29,6 +35,71 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
+
+# --- Modelo para receber o token do Google ---
+class GoogleToken(BaseModel):
+    id_token: str
+
+# --- Endpoint de autenticação com Google ---
+@router.post("/auth/google", response_model=Token)
+async def google_auth(token: GoogleToken, db: AsyncSession = Depends(get_db)):
+    """
+    Lida com o login/registro de um usuário através de um Google ID Token.
+    Se o usuário não existir, um novo é criado na base de dados.
+    """
+    try:
+        # --- MODIFICADO: Agora usa o google_client_id do arquivo de configurações ---
+        idinfo = id_token.verify_oauth2_token(
+            token.id_token, requests.Request(), settings.google_client_id
+        )
+
+        email = idinfo.get("email")
+        if not email:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="E-mail não encontrado no token.")
+
+        # Verifica se o usuário já existe na sua base de dados
+        user = await user_service.get_user_by_email(db, email=email)
+
+        if not user:
+            logger.info("Usuário com e-mail %s não encontrado. Criando novo usuário.", email)
+            # Lógica para criar um nome de usuário a partir do nome do Google
+            google_name = idinfo.get("name", "")
+            sanitized_username = google_name.replace(" ", "").lower()[:15]
+            
+            # Cria a estrutura do novo usuário
+            user_in = UserCreate(
+                email=email,
+                username=sanitized_username,
+                # Usa o 'sub' (ID único do Google) como senha
+                password=idinfo.get("sub"),
+                role="user"
+            )
+            user = await user_service.register_user(db=db, user_in=user_in)
+
+        # Se o usuário já existia ou foi criado com sucesso, gera os tokens da sua API
+        logger.info("Gerando tokens para o usuário: %s", user.email)
+        access_token = create_access_token(data={"sub": str(user.email)})
+        refresh_token = create_refresh_token(data={"sub": str(user.email)})
+
+        return {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+        }
+
+    except ValueError as e:
+        logger.error("Erro de validação do token do Google: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token do Google inválido ou expirado.",
+        )
+    except Exception as e:
+        logger.error("Um erro inesperado ocorreu durante a autenticação com Google: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ocorreu um erro: {e}",
+        )
+
 
 @router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 async def register(
@@ -157,3 +228,4 @@ async def current_user(current_user: User = Depends(get_current_user)):
     Procura o usuário autenticado atualmente
     """
     return current_user
+

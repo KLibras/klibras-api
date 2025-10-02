@@ -41,6 +41,7 @@ class Settings:
     smtp_password: str = get_env_variable("SMTP_PASSWORD")
     smtp_server: str = get_env_variable("SMTP_SERVER")
     smtp_port: int = int(get_env_variable("SMTP_PORT"))
+    google_client_id: str = get_env_variable("GOOGLE_CLIENT_ID")
 
 
 settings = Settings()
