@@ -98,7 +98,8 @@ uvloop==0.21.0
 watchdog==6.0.0
 watchfiles==1.1.0
 websockets==15.0.1
+google-auth
 python-multipart
-tensorflow-cpu
+tensorflow-cpu # Mudar para o tensorflow quando for dar deploy
 mediapipe
 opencv-python-headless
