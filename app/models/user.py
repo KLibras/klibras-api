@@ -1,18 +1,31 @@
-from sqlalchemy import Column, Integer, String, ARRAY, Enum as SQLAlchemyEnum
+from typing import List, TYPE_CHECKING
+from sqlalchemy import (Integer, String, Enum as SQLAlchemyEnum)
+from sqlalchemy.orm import (Mapped, mapped_column, relationship)
 from app.db.database_connection import Base
-from app.schemas.enums import UserRole 
+from app.schemas.enums import UserRole
 
+if TYPE_CHECKING:
+    from app.models.module import Module
+    from app.models.sign import Sign
 
 class User(Base):
-    __tablename__ = "users"  
+    __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    email = Column(String(50), unique=True, index=True, nullable=False)
-    username = Column(String(15), unique=True, index=True, nullable=False,)
-    password = Column(String(100), nullable=False)
-    points = Column(Integer, default=0,nullable=False)
-
-    role = Column(SQLAlchemyEnum(UserRole, name="roles_enum"), nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(50), unique=True, index=True, nullable=False)
+    username: Mapped[str] = mapped_column(String(15), unique=True, index=True, nullable=False)
+    password: Mapped[str] = mapped_column(String(100), nullable=False)
+    points: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    role: Mapped[UserRole] = mapped_column(SQLAlchemyEnum(UserRole, name="roles_enum"), default=UserRole.USER, nullable=False)
+    
+    completed_modules: Mapped[List["Module"]] = relationship(
+        secondary="user_module_association", 
+        back_populates="completed_by_users"
+    )
+    known_signs: Mapped[List["Sign"]] = relationship(
+        secondary="user_sign_association", 
+        back_populates="known_by_users"
+    )
 
     def __repr__(self):
         return f"User(id={self.id}, username='{self.username}', points={self.points})"

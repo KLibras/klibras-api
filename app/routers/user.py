@@ -19,8 +19,11 @@ from google.oauth2 import id_token
 from google.auth.transport import requests
 
 from app.services import user_service
+# --- MODIFICADO: Importa os schemas necessários ---
 from app.schemas.user import UserCreate, UserRead
 from app.schemas.token import Token
+from app.schemas.sign import SignRead
+from app.schemas.module import ModuleRead
 from app.dependencies import get_current_user, get_db
 from app.core.security import (
     create_access_token,
@@ -30,15 +33,23 @@ from app.core.security import (
 # Importa as configurações centralizadas
 from app.core.config import settings
 from app.models.user import User
+from app.models.sign import Sign
+from app.models.module import Module
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
-# --- Modelo para receber o token do Google ---
+# --- Modelos para receber o token do Google e dados de update ---
 class GoogleToken(BaseModel):
     id_token: str
+
+class UsernameUpdate(BaseModel):
+    new_username: str
+
+class PasswordUpdate(BaseModel):
+    new_password: str
 
 # --- Endpoint de autenticação com Google ---
 @router.post("/auth/google", response_model=Token)
@@ -225,7 +236,112 @@ async def get_leaderboard(
 @router.get("/users/me", response_model=UserRead)
 async def current_user(current_user: User = Depends(get_current_user)):
     """
-    Procura o usuário autenticado atualmente
+    Retorna os dados do usuário autenticado atualmente.
     """
     return current_user
 
+# --- NOVOS ENDPOINTS ---
+
+@router.post(
+    "/users/me/modules/{module_id}",
+    response_model=UserRead,
+    summary="Adiciona um módulo como concluído para o usuário"
+)
+async def add_completed_module(
+    module_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Marca um módulo como concluído para o usuário logado.
+    Adiciona os sinais do módulo aos sinais conhecidos e atualiza os pontos.
+    """
+    updated_user = await user_service.add_completed_module_to_user(
+        db=db, user=current_user, module_id=module_id
+    )
+    return updated_user
+
+@router.post(
+    "/users/me/signs/{sign_id}",
+    response_model=UserRead,
+    summary="Adiciona um sinal como conhecido para o usuário"
+)
+async def add_known_sign(
+    sign_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Adiciona um único sinal à lista de sinais conhecidos do usuário logado
+    e atualiza sua pontuação.
+    """
+    updated_user = await user_service.add_known_sign_to_user(
+        db=db, user=current_user, sign_id=sign_id
+    )
+    return updated_user
+
+@router.get(
+    "/users/me/modules",
+    response_model=List[ModuleRead],
+    summary="Busca os módulos concluídos pelo usuário"
+)
+async def get_completed_modules(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Retorna a lista de todos os módulos que o usuário logado já completou.
+    """
+    modules = await user_service.get_user_completed_modules(db=db, user=current_user)
+    return modules
+
+@router.get(
+    "/users/me/signs",
+    response_model=List[SignRead],
+    summary="Busca os sinais conhecidos pelo usuário"
+)
+async def get_known_signs(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Retorna a lista de todos os sinais que o usuário logado conhece.
+    """
+    signs = await user_service.get_user_known_signs(db=db, user=current_user)
+    return signs
+
+@router.patch(
+    "/users/me/username",
+    response_model=UserRead,
+    summary="Atualiza o nome de usuário"
+)
+async def update_username(
+    username_update: UsernameUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Atualiza o nome de usuário (username) do usuário logado.
+    """
+    updated_user = await user_service.update_user_username(
+        db=db, user=current_user, new_username=username_update.new_username
+    )
+    return updated_user
+
+@router.patch(
+    "/users/me/password",
+    status_code=status.HTTP_200_OK,
+    summary="Atualiza a senha do usuário"
+)
+async def update_password(
+    password_update: PasswordUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Atualiza a senha do usuário logado.
+    """
+    await user_service.update_user_password(
+        db=db, user=current_user, new_password=password_update.new_password
+    )
+    return {"message": "Senha atualizada com sucesso."}

@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import user , recognition
-from app.db.database_connection import engine, Base
+# --- MODIFICADO: Importa a sessão e a função de dados iniciais ---
+from app.db.database_connection import engine, Base, AsyncSessionLocal
+from app.db.initial_data import create_initial_data 
 from app.core.config import settings
 import logging
 
@@ -15,10 +17,10 @@ logger = logging.getLogger(__name__)
 # Configura o CORS 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins,  # Lista de origens/ips liberados para fazer requests // Em produção deixa vazio senão vai bloquear os requests
+    allow_origins=settings.allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],  # Permite todos os metodos HTTP
-    allow_headers=["*"],  # Permite todos os headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 @app.on_event("startup")
@@ -33,14 +35,17 @@ async def startup_event():
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Criação da tabelas ocorreu bem")
 
+    # --- MODIFICADO: Adiciona a chamada para criar os dados iniciais ---
+    logger.info("Verificando e populando dados iniciais...")
+    async with AsyncSessionLocal() as session:
+        await create_initial_data(session)
+
+
 # Inclue o router de users.
 app.include_router(user.router)
 logger.info("Router de users incluído")
 
 
 # Inclue o router do reconhecimento de sinais
-
 app.include_router(recognition.router, prefix="/action", tags=["Action Recognition"])
 logger.info("Action recognition router included")
-
-
