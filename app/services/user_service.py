@@ -12,7 +12,6 @@ from app.models.module import Module
 from app.models.sign import Sign
 from app.schemas.user import UserCreate
 from app.core.security import get_password_hash, verify_password
-# from app.services.smtp_service import send_welcome_email
 
 logger = logging.getLogger(__name__)
 
@@ -263,9 +262,22 @@ async def update_user_password(db: AsyncSession, user: User, new_password: str) 
         logger.error("Erro ao atualizar a senha do usuário '%s': %s", user.username, e)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Não foi possível atualizar a senha.")
 
+async def get_modules(db: AsyncSession, name: str) -> Module | None:
+    """Busca um módulo pelo nome e retorna o módulo com a lista de sinais associados."""
+    logger.debug("Buscando módulo pelo nome: %s", name)
+    stmt = (
+        select(Module)
+        .options(selectinload(Module.signs)) 
+        .where(Module.name == name)
+    )
+    result = await db.execute(stmt)
+    module = result.scalars().first()
+
+    if module:
+        logger.info("Módulo '%s' encontrado com %d sinais.", name, len(module.signs))
+    else:
+        logger.warning("Módulo com nome '%s' não encontrado.", name)
+
+    return module
 
 
-#async def run_welcome_email_task(user_email: str):
- #   """Wrapper pra rodar a tarefa de mandar o email em segundo plano"""
-  #  await send_welcome_email(user_email=user_email)
-   # logger.info("Email de boas-vindas enviado para %s", user_email)

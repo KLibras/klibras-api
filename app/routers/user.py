@@ -23,7 +23,7 @@ from app.services import user_service
 from app.schemas.user import UserCreate, UserRead
 from app.schemas.token import Token
 from app.schemas.sign import SignRead
-from app.schemas.module import ModuleRead
+from app.schemas.module import ModuleRead, ModuleWithSigns
 from app.dependencies import get_current_user, get_db
 from app.core.security import (
     create_access_token,
@@ -51,7 +51,6 @@ class UsernameUpdate(BaseModel):
 class PasswordUpdate(BaseModel):
     new_password: str
 
-# --- Endpoint de autenticação com Google ---
 @router.post("/auth/google", response_model=Token)
 async def google_auth(token: GoogleToken, db: AsyncSession = Depends(get_db)):
     """
@@ -59,7 +58,7 @@ async def google_auth(token: GoogleToken, db: AsyncSession = Depends(get_db)):
     Se o usuário não existir, um novo é criado na base de dados.
     """
     try:
-        # --- MODIFICADO: Agora usa o google_client_id do arquivo de configurações ---
+        
         idinfo = id_token.verify_oauth2_token(
             token.id_token, requests.Request(), settings.google_client_id
         )
@@ -240,7 +239,6 @@ async def current_user(current_user: User = Depends(get_current_user)):
     """
     return current_user
 
-# --- NOVOS ENDPOINTS ---
 
 @router.post(
     "/users/me/modules/{module_id}",
@@ -345,3 +343,33 @@ async def update_password(
         db=db, user=current_user, new_password=password_update.new_password
     )
     return {"message": "Senha atualizada com sucesso."}
+
+@router.get(
+    "/get_module/{name}",
+    response_model=ModuleWithSigns, # Define o schema da resposta bem-sucedida
+    summary="Obter um Módulo pelo Nome",
+    description="Busca um módulo específico pelo seu nome e retorna seus detalhes junto com a lista de sinais associados.",
+    tags=["Modules"] # Agrupa o endpoint na documentação
+)
+async def get_module_by_name(
+    name: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user) 
+):
+    """
+    Endpoint para buscar um módulo pelo nome.
+
+    - **name**: O nome exato do módulo a ser buscado.
+    - Retorna o módulo e seus sinais se encontrado.
+    - Retorna um erro 404 Not Found se o módulo não existir.
+    """
+    # Chama a função do CRUD passando a sessão e o nome do módulo
+    module = await user_service.get_modules(db=db, name=name)
+
+    # Se a função retornar None, significa que o módulo não foi encontrado
+    if not module:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Módulo com o nome '{name}' não encontrado."
+        )
+    return module

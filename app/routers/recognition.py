@@ -5,7 +5,7 @@ from app.models.user import User
 
 router = APIRouter()
 
-@router.post("/check_action/")
+@router.post("/check_action")
 async def check_action(
     expected_action: str = Form(...),
     video: UploadFile = File(...),

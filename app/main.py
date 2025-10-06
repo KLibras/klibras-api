@@ -47,5 +47,5 @@ logger.info("Router de users incluído")
 
 
 # Inclue o router do reconhecimento de sinais
-app.include_router(recognition.router, prefix="/action", tags=["Action Recognition"])
+app.include_router(recognition.router, tags=["Action Recognition"])
 logger.info("Action recognition router included")
