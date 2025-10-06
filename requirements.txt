@@ -102,3 +102,5 @@ python-multipart
 tensorflow-cpu # Mudar para o tensorflow quando for dar deploy
 mediapipe
 opencv-python-headless
+aio-pika
+gunicorn
