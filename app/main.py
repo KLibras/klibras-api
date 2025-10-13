@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import user , recognition
+from app.routers import user #, recognition
 # --- MODIFICADO: Importa a sessão e a função de dados iniciais ---
 from app.db.database_connection import engine, Base, AsyncSessionLocal
 from app.db.initial_data import create_initial_data 
@@ -47,5 +47,5 @@ logger.info("Router de users incluído")
 
 
 # Inclue o router do reconhecimento de sinais
-app.include_router(recognition.router, tags=["Action Recognition"])
-logger.info("Action recognition router included")
+#app.include_router(recognition.router, tags=["Action Recognition"])
+#logger.info("Action recognition router included")

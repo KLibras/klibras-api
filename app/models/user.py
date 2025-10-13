@@ -1,5 +1,5 @@
 from typing import List, TYPE_CHECKING
-from sqlalchemy import (Integer, String, Enum as SQLAlchemyEnum)
+from sqlalchemy import (Integer, String, Enum as SQLAlchemyEnum, Table, Column, ForeignKey)
 from sqlalchemy.orm import (Mapped, mapped_column, relationship)
 from app.db.database_connection import Base
 from app.schemas.enums import UserRole
@@ -7,6 +7,21 @@ from app.schemas.enums import UserRole
 if TYPE_CHECKING:
     from app.models.module import Module
     from app.models.sign import Sign
+
+user_module_association = Table(
+    "user_module_association",
+    Base.metadata,
+    Column("user_id", ForeignKey("users.id"), primary_key=True),
+    Column("module_id", ForeignKey("modules.id"), primary_key=True),
+)
+
+user_sign_association = Table(
+    "user_sign_association",
+    Base.metadata,
+    Column("user_id", ForeignKey("users.id"), primary_key=True),
+    Column("sign_id", ForeignKey("signs.id"), primary_key=True),
+)
+
 
 class User(Base):
     __tablename__ = "users"
@@ -19,11 +34,11 @@ class User(Base):
     role: Mapped[UserRole] = mapped_column(SQLAlchemyEnum(UserRole, name="roles_enum"), default=UserRole.USER, nullable=False)
     
     completed_modules: Mapped[List["Module"]] = relationship(
-        secondary="user_module_association", 
+        secondary=user_module_association, 
         back_populates="completed_by_users"
     )
     known_signs: Mapped[List["Sign"]] = relationship(
-        secondary="user_sign_association", 
+        secondary=user_sign_association, 
         back_populates="known_by_users"
     )
 

@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from google.oauth2 import id_token
 from google.auth.transport import requests
 
+from app.schemas.enums import UserRole
 from app.services import user_service
 # --- MODIFICADO: Importa os schemas necessários ---
 from app.schemas.user import UserCreate, UserRead
@@ -82,7 +83,7 @@ async def google_auth(token: GoogleToken, db: AsyncSession = Depends(get_db)):
                 username=sanitized_username,
                 # Usa o 'sub' (ID único do Google) como senha
                 password=idinfo.get("sub"),
-                role="user"
+                role=UserRole.USER
             )
             user = await user_service.register_user(db=db, user_in=user_in)
 

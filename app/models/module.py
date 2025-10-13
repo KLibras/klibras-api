@@ -5,6 +5,7 @@ from app.db.database_connection import Base
 
 if TYPE_CHECKING:
     from app.models.sign import Sign
+    from app.models.user import User
 
 module_sign_association = Table(
     "module_sign_association",
@@ -22,4 +23,9 @@ class Module(Base):
     signs: Mapped[List["Sign"]] = relationship(
         secondary=module_sign_association,
         back_populates="modules"
+    )
+    
+    completed_by_users: Mapped[List["User"]] = relationship(
+        secondary="user_module_association",
+        back_populates="completed_modules"
     )

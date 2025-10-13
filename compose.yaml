@@ -1,0 +1,51 @@
+# Specifies the docker-compose file format version.
+# The 'version' attribute is optional in newer versions.
+# version: '3.8'
+
+# Defines the services (containers) that make up your application.
+services:
+  # The database service, using MySQL.
+  db:
+    image: mysql:8.0
+    container_name: klibras_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: KLibras
+      MYSQL_USER: klibras
+      MYSQL_PASSWORD: root
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+
+  # The message broker service, using RabbitMQ.
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: klibras_rabbitmq
+    restart: always
+    ports:
+      - "5672:5672"   # Port for application connection
+      - "15672:15672" # Port for the management web UI
+    environment:
+      RABBITMQ_DEFAULT_USER: klibras
+      RABBITMQ_DEFAULT_PASS: root
+
+  # This is the new service for your Python application.
+  app:
+    # Tells Docker Compose to build an image from the Dockerfile in the current directory ('.').
+    build: .
+    container_name: klibras_app
+    restart: always
+    ports:
+      # Maps port 8000 on your machine to port 8000 in the container.
+      - "8000:8000"
+    # This is crucial: it ensures the database and rabbitmq services start before your app does.
+    depends_on:
+      - db
+      - rabbitmq
+
+# Defines the named volumes for data persistence.
+volumes:
+  db_data:
+
