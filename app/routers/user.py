@@ -83,6 +83,7 @@ async def google_auth(token: GoogleToken, db: AsyncSession = Depends(get_db)):
                 username=sanitized_username,
                 # Usa o 'sub' (ID único do Google) como senha
                 password=idinfo.get("sub"),
+                points=0,
                 role=UserRole.USER
             )
             user = await user_service.register_user(db=db, user_in=user_in)
@@ -347,10 +348,10 @@ async def update_password(
 
 @router.get(
     "/get_module/{name}",
-    response_model=ModuleWithSigns, # Define o schema da resposta bem-sucedida
+    response_model=ModuleWithSigns, 
     summary="Obter um Módulo pelo Nome",
     description="Busca um módulo específico pelo seu nome e retorna seus detalhes junto com a lista de sinais associados.",
-    tags=["Modules"] # Agrupa o endpoint na documentação
+    tags=["Modules"] 
 )
 async def get_module_by_name(
     name: str,
@@ -374,3 +375,76 @@ async def get_module_by_name(
             detail=f"Módulo com o nome '{name}' não encontrado."
         )
     return module
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+import uuid
+import asyncio
+from multiprocessing import Manager
+from fastapi import APIRouter, HTTPException, status, BackgroundTasks
+from fastapi.responses import JSONResponse
+
+manager = Manager()
+job_results = manager.dict()
+
+
+async def dummy_processing_task(job_id: str):
+    """
+    A dummy background task that waits for 5 seconds and then
+    sets a mock result for the given job ID.
+    """
+    print(f"Job {job_id}: Background processing started...")
+    await asyncio.sleep(2)  
+
+    
+    result = {
+        "message": "Processing complete!",
+        "action_found": True,
+        "confidence": "99.99%",
+    }
+
+    
+    job_results[job_id] = {"status": "completed", "result": result}
+    print(f"Job {job_id}: Processing finished.")
+
+
+@router.post("/check_action", status_code=status.HTTP_202_ACCEPTED)
+async def check_action(background_tasks: BackgroundTasks):
+    """
+    Starts a dummy background job and immediately returns a job ID.
+    """
+    job_id = str(uuid.uuid4())
+    job_results[job_id] = {"status": "processing"}
+
+    
+    background_tasks.add_task(dummy_processing_task, job_id)
+
+   
+    return {"job_id": job_id, "status": "accepted"}
+
+
+@router.get("/results/{job_id}")
+async def get_job_result(job_id: str):
+    """
+    Retrieves the status or result of a job by its ID from the shared store.
+    """
+    job = job_results.get(job_id)
+
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
+        )
+
+   
+    return JSONResponse(content=dict(job))

@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import user #, recognition
-# --- MODIFICADO: Importa a sessão e a função de dados iniciais ---
 from app.db.database_connection import engine, Base, AsyncSessionLocal
 from app.db.initial_data import create_initial_data 
 from app.core.config import settings

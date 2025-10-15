@@ -76,6 +76,7 @@ async def register_user(db: AsyncSession, user_in: UserCreate) -> User:
         email=user_in.email,
         username=user_in.username,
         password=hashed_password,
+        points=user_in.points,
         role=user_in.role 
     )
     

@@ -7,6 +7,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     username: str
     password: str
+    points: int
     role: UserRole = UserRole.USER
 
 
