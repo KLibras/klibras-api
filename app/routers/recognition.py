@@ -5,9 +5,10 @@ from fastapi import APIRouter, File, UploadFile, Form, Depends, HTTPException, s
 from fastapi.responses import JSONResponse
 from app.dependencies import get_current_user
 from app.models.user import User
+import logging
 
 router = APIRouter()
-
+logger = logging.getLogger(__name__)
 
 job_results = {}
 
@@ -22,48 +23,42 @@ async def check_action(
     video: UploadFile = File(...),
     current_user: User = Depends(get_current_user)
 ):
-    """Analisa um vídeo para verificar se ele contém a ação esperada.
-
-    Este endpoint recebe um vídeo e uma string com a ação esperada,
-    processa o vídeo e retorna o resultado da predição. Requer
-    autenticação para ser acessado.
-
-    Args:
-        expected_action (str): Ação esperada, recebida via formulário.
-        video (UploadFile): O arquivo de vídeo enviado para análise.
-        current_user (User): O usuário autenticado, injetado pela dependência.
-
-    Returns:
-        Any: O resultado retornado pelo serviço de processamento de vídeo.
-    """
     job_id = str(uuid.uuid4())
     video_content = await video.read()
+    logger.info("check action called with expected sign ")
 
     connection = await get_rabbitmq_connection()
     async with connection:
         channel = await connection.channel()
+        queue = await channel.declare_queue('video_processing_queue', durable=True)
+        
         message_body = {
             "job_id": job_id,
             "expected_action": expected_action,
-            "video_content": video_content.hex() # Serialize the video content
+            "video_content": video_content.hex()
         }
+        
         await channel.default_exchange.publish(
-            aio_pika.Message(body=json.dumps(message_body).encode()),
+            aio_pika.Message(
+                body=json.dumps(message_body).encode(),
+                delivery_mode=aio_pika.DeliveryMode.PERSISTENT
+            ),
             routing_key='video_processing_queue',
         )
 
     job_results[job_id] = {"status": "processing"}
+    
     return JSONResponse(
-        content={"job_id": job_id, "status": "accepted"},
+        content={"jobId": job_id, "status": "processing"},
         status_code=status.HTTP_202_ACCEPTED
     )
 
 @router.get("/results/{job_id}")
 async def get_job_result(job_id: str, current_user: User = Depends(get_current_user)):
-    """
-    Retrieves the result of a video processing job.
-    """
     result = job_results.get(job_id)
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
-    return result
+    
+    response = result.copy()
+    response["jobId"] = job_id
+    return response
