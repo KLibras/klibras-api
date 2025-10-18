@@ -1,7 +1,8 @@
 import uuid
 import json
 import aio_pika
-from fastapi import APIRouter, File, UploadFile, Form, Depends, HTTPException, status
+import asyncio
+from fastapi import APIRouter, File, UploadFile, Form, Depends, HTTPException, status, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -32,7 +33,6 @@ async def check_action(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Upload video for sign language action verification"""
     job_id = str(uuid.uuid4())
     video_content = await video.read()
     logger.info(f"check action called with expected sign: {expected_action} by user {current_user.id}")
@@ -63,7 +63,7 @@ async def check_action(
             job_id=job_id,
             user_id=current_user.id,
             expected_action=expected_action,
-            status="processing"
+            status="pending"
         )
         db.add(job)
         await db.commit()
@@ -71,7 +71,7 @@ async def check_action(
         logger.info(f"Job {job_id} queued for processing")
         
         return JSONResponse(
-            content={"jobId": job_id, "status": "processing"},
+            content={"jobId": job_id, "status": "pending"},
             status_code=status.HTTP_202_ACCEPTED
         )
     
@@ -85,34 +85,129 @@ async def check_action(
 
 @router.get("/results/{job_id}")
 async def get_job_result(
-    job_id: str, 
+    job_id: str,
+    wait: bool = Query(default=False, description="Wait for job completion (long polling)"),
+    timeout: int = Query(default=10, ge=1, le=120, description="Timeout in seconds for waiting"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get video processing results"""
-    result = await db.execute(
-        select(ProcessingJob).filter(
-            ProcessingJob.job_id == job_id,
-            ProcessingJob.user_id == current_user.id
-        )
-    )
-    job = result.scalars().first()
     
-    if not job:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, 
-            detail="Job not found"
+    if wait:
+        start_time = asyncio.get_event_loop().time()
+        
+        while True:
+            db.expire_all()
+            
+            result = await db.execute(
+                select(ProcessingJob).filter(
+                    ProcessingJob.job_id == job_id,
+                    ProcessingJob.user_id == current_user.id
+                )
+            )
+            job = result.scalars().first()
+            
+            if not job:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND, 
+                    detail="Job not found"
+                )
+            
+            if job.status in ["completed", "failed"]:
+                logger.info(f"Job {job_id} finished with status: {job.status}")
+                return {
+                    "jobId": job.job_id,
+                    "status": job.status,
+                    "actionFound": job.action_found,
+                    "predictedAction": job.predicted_action,
+                    "confidence": job.confidence,
+                    "isMatch": job.is_match,
+                    "expectedAction": job.expected_action,
+                    "error": job.error,
+                    "createdAt": job.created_at.isoformat() if job.created_at else None,
+                    "completedAt": job.completed_at.isoformat() if job.completed_at else None
+                }
+            
+            elapsed = asyncio.get_event_loop().time() - start_time
+            if elapsed > timeout:
+                logger.info(f"Job {job_id} timeout after {elapsed:.2f}s, status: {job.status}")
+                return {
+                    "jobId": job.job_id,
+                    "status": job.status,
+                    "message": "Job still processing, check again later",
+                    "actionFound": None,
+                    "predictedAction": None,
+                    "confidence": None,
+                    "isMatch": None,
+                    "expectedAction": job.expected_action,
+                    "error": None,
+                    "createdAt": job.created_at.isoformat() if job.created_at else None,
+                    "completedAt": None
+                }
+            
+            await asyncio.sleep(0.5)
+    
+    else:
+        result = await db.execute(
+            select(ProcessingJob).filter(
+                ProcessingJob.job_id == job_id,
+                ProcessingJob.user_id == current_user.id
+            )
         )
+        job = result.scalars().first()
+        
+        if not job:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, 
+                detail="Job not found"
+            )
+        
+        return {
+            "jobId": job.job_id,
+            "status": job.status,
+            "actionFound": job.action_found,
+            "predictedAction": job.predicted_action,
+            "confidence": job.confidence,
+            "isMatch": job.is_match,
+            "expectedAction": job.expected_action,
+            "error": job.error,
+            "createdAt": job.created_at.isoformat() if job.created_at else None,
+            "completedAt": job.completed_at.isoformat() if job.completed_at else None
+        }
+
+
+@router.get("/jobs/user/history")
+async def get_user_job_history(
+    limit: int = Query(default=10, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(
+        select(ProcessingJob)
+        .filter(ProcessingJob.user_id == current_user.id)
+        .order_by(ProcessingJob.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    jobs = result.scalars().all()
     
     return {
-        "jobId": job.job_id,
-        "status": job.status,
-        "actionFound": job.action_found,
-        "predictedAction": job.predicted_action,
-        "confidence": job.confidence,
-        "isMatch": job.is_match,
-        "expectedAction": job.expected_action,
-        "error": job.error,
-        "createdAt": job.created_at,
-        "completedAt": job.completed_at
+        "jobs": [
+            {
+                "jobId": job.job_id,
+                "status": job.status,
+                "actionFound": job.action_found,
+                "predictedAction": job.predicted_action,
+                "confidence": job.confidence,
+                "isMatch": job.is_match,
+                "expectedAction": job.expected_action,
+                "error": job.error,
+                "createdAt": job.created_at.isoformat() if job.created_at else None,
+                "completedAt": job.completed_at.isoformat() if job.completed_at else None
+            }
+            for job in jobs
+        ],
+        "total": len(jobs),
+        "limit": limit,
+        "offset": offset
     }
