@@ -38,6 +38,7 @@ class Settings:
     long_refresh_token_lifetime: int = int(get_env_variable("LONG_REFRESH_TOKEN_LIFETIME"))
     short_refresh_token_lifetime: int = int(get_env_variable("SHORT_REFRESH_TOKEN_LIFETIME"))
     google_client_id: str = get_env_variable("GOOGLE_CLIENT_ID")
+    rabbitmq_url: str = get_env_variable("RABBITMQ_URL")
 
 
 settings = Settings()

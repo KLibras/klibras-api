@@ -1,10 +1,4 @@
-# Specifies the docker-compose file format version.
-# The 'version' attribute is optional in newer versions.
-# version: '3.8'
-
-# Defines the services (containers) that make up your application.
 services:
-  # The database service, using MySQL.
   db:
     image: mysql:8.0
     container_name: klibras_db
@@ -18,34 +12,70 @@ services:
       - "3306:3306"
     volumes:
       - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # The message broker service, using RabbitMQ.
   rabbitmq:
     image: rabbitmq:3-management-alpine
     container_name: klibras_rabbitmq
     restart: always
     ports:
-      - "5672:5672"   # Port for application connection
-      - "15672:15672" # Port for the management web UI
+      - "5672:5672"
+      - "15672:15672"
     environment:
       RABBITMQ_DEFAULT_USER: klibras
       RABBITMQ_DEFAULT_PASS: root
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # This is the new service for your Python application.
   app:
-    # Tells Docker Compose to build an image from the Dockerfile in the current directory ('.').
     build: .
     container_name: klibras_app
     restart: always
     ports:
-      # Maps port 8000 on your machine to port 8000 in the container.
       - "8000:8000"
-    # This is crucial: it ensures the database and rabbitmq services start before your app does.
     depends_on:
-      - db
-      - rabbitmq
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: mysql+aiomysql://klibras:root@db:3306/KLibras
+      RABBITMQ_URL: amqp://klibras:root@rabbitmq/
+      ALLOWED_ORIGINS: "*"
+      SECRET_KEY: your-secret-key-change-this
+      ALGORITHM: HS256
+      ACCESS_TOKEN_LIFETIME: 30
+      LONG_REFRESH_TOKEN_LIFETIME: 10080
+      SHORT_REFRESH_TOKEN_LIFETIME: 1440
+      GOOGLE_CLIENT_ID: ""
 
-# Defines the named volumes for data persistence.
+  worker:
+    build: .
+    container_name: klibras_worker
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: mysql+aiomysql://klibras:root@db:3306/KLibras
+      RABBITMQ_URL: amqp://klibras:root@rabbitmq/
+      ALLOWED_ORIGINS: "*"
+      SECRET_KEY: your-secret-key-change-this
+      ALGORITHM: HS256
+      ACCESS_TOKEN_LIFETIME: 30
+      LONG_REFRESH_TOKEN_LIFETIME: 10080
+      SHORT_REFRESH_TOKEN_LIFETIME: 1440
+      GOOGLE_CLIENT_ID: ""
+    command: python app/workers/video_worker.py
+
 volumes:
   db_data:
-

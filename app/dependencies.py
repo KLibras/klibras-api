@@ -6,16 +6,13 @@ from app.core.security import get_subject_from_token
 from app.db.database_connection import AsyncSessionLocal
 from app.models.user import User
 from app.services import user_service
+import logging
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
+logger = logging.getLogger(__name__)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/users/login")
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """
-    Função assincrona que providencia uma sessão com o banco de dados
-
-    Yields:
-        AsyncSession: Sessão assincrona com o banco de dados
-    """
+    """Função assincrona que providencia uma sessão com o banco de dados"""
     async with AsyncSessionLocal() as session:
         yield session
 
@@ -24,12 +21,11 @@ async def get_current_user(
     db: AsyncSession = Depends(get_db),
     token: str = Depends(oauth2_scheme)
 ) -> User:
-    """
-    Dependencia para pegar o usuário atual que está usando a instância
-    """
+    """Dependencia para pegar o usuário atual que está usando a instância"""
     try:
         email = get_subject_from_token(token)
-    except ValueError:
+    except ValueError as e:
+        logger.error(f"Token extraction failed: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Autenticação inválida",
@@ -38,6 +34,7 @@ async def get_current_user(
 
     user = await user_service.get_user_by_email(db, email=email)
     if not user:
+        logger.error(f"User not found for email: {email}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuário não encontrado",
