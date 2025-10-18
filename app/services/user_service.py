@@ -16,29 +16,22 @@ from app.core.security import get_password_hash, verify_password
 logger = logging.getLogger(__name__)
 
 async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
-    """Procura e retorna um usuário pelo email."""
     logger.debug("Buscando usuário pelo email: %s", email)
     result = await db.execute(select(User).where(User.email == email))
     return result.scalars().first()
 
 async def add_points(db: AsyncSession, username: str, points: int) -> bool:
-    """Adiciona pontos a um usuário no banco de dados."""
     logger.debug("Tentando adicionar %d pontos ao usuário: %s", points, username)
     result = await db.execute(select(User).where(User.username == username))
     user = result.scalar_one_or_none()
-
 
     if not user:
         logger.warning("Usuário '%s' não encontrado. Nenhum ponto foi adicionado.", username)
         return False
 
     try:
-      
         user.points += points
-        
-   
         await db.commit()
- 
         await db.refresh(user)
         
         logger.info(
@@ -55,23 +48,16 @@ async def add_points(db: AsyncSession, username: str, points: int) -> bool:
         await db.rollback()
         return False
 
-
 async def get_user_by_email_or_username(db: AsyncSession, email: str, username: str) -> User | None:
-    """Procura e retorna um usuário pelo email ou username."""
     logger.debug("Procurando um usuário pelo email (%s) ou username (%s)", email, username)
     result = await db.execute(
         select(User).where(or_(User.email == email, User.username == username))
     )
     return result.scalars().first()
 
-
 async def register_user(db: AsyncSession, user_in: UserCreate) -> User:
-    """
-    Registra um usuário no banco de dados.
-    """
     hashed_password = get_password_hash(user_in.password)
     
-
     db_user = User(
         email=user_in.email,
         username=user_in.username,
@@ -88,7 +74,6 @@ async def register_user(db: AsyncSession, user_in: UserCreate) -> User:
         logger.info("Usuário %s criado no banco de dados.", user_in.email)
         return db_user
     except IntegrityError:
-    
         await db.rollback()
         logger.error(
             "DB IntegrityError na criação do usuário com email %s ou username %s", 
@@ -100,18 +85,13 @@ async def register_user(db: AsyncSession, user_in: UserCreate) -> User:
         )
 
 async def authenticate_user(db: AsyncSession, email: str, password: str) -> User | None:
-    """
-    Autentica o usuário pelo email e senha
-    Se for autenticado corretamente retorna o usuário, caso não retorna NADA.
-    """
     logger.info("Tentando autenticar usuário com email : %s", email)
     user = await get_user_by_email(db, email)
     
     if not user:
         logger.warning("Autenticação falhou, não existe usuário com esse email %s", email)
         return None
-
-   
+    
     if not verify_password(password, str(user.password)):
         logger.warning("Autenticação falhou, email ou senha incorretos.%s", email)
         return None
@@ -119,118 +99,123 @@ async def authenticate_user(db: AsyncSession, email: str, password: str) -> User
     logger.info("Usuário %s autenticado com sucesso.", email)
     return user
 
-
-
 async def get_users_leaderboard(db:AsyncSession) -> List[User]: 
-    """Retorna o ranking de usuários ordenado por pontos."""
     logger.info("Tentando pegar o ranking dos usuários")
     stmt = select(User).order_by(desc(User.points))
-
     result = await db.execute(stmt)
     leaderboard = result.scalars().all()
-
     return list(leaderboard)
 
 async def add_completed_module_to_user(db: AsyncSession, user: User, module_id: int) -> User:
-    """Adiciona um módulo concluído a um usuário, atualizando sinais conhecidos e pontos."""
-    logger.debug("Adicionando módulo ID %d para o usuário '%s'", module_id, user.username)
-
-    module_result = await db.execute(
-        select(Module).options(selectinload(Module.signs)).where(Module.id == module_id)
+    result = await db.execute(
+        select(Module)
+        .options(selectinload(Module.signs))
+        .filter(Module.id == module_id)
     )
-    module_to_add = module_result.scalars().first()
-
+    module_to_add = result.scalars().first()
+    
     if not module_to_add:
-        logger.warning("Módulo com ID %d não encontrado.", module_id)
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Módulo não encontrado.")
-
-    user_result = await db.execute(
-        select(User).options(selectinload(User.completed_modules), selectinload(User.known_signs)).where(User.id == user.id)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Module with ID {module_id} not found."
+        )
+    
+    result = await db.execute(
+        select(User)
+        .options(
+            selectinload(User.completed_modules),
+            selectinload(User.known_signs)
+        )
+        .filter(User.id == user.id)
     )
-    db_user = user_result.scalars().one()
-
+    db_user = result.scalars().first()
+    
+    if not db_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found."
+        )
+    
     if module_to_add in db_user.completed_modules:
-        logger.info("Usuário '%s' já completou o módulo ID %d.", user.username, module_id)
+        logger.info(f"Module {module_id} already completed by user {user.id}")
         return db_user
-
+    
     db_user.completed_modules.append(module_to_add)
-    points_to_add = 0
-    new_signs_count = 0
-
+    
     for sign in module_to_add.signs:
         if sign not in db_user.known_signs:
             db_user.known_signs.append(sign)
-            points_to_add += sign.pontos
-            new_signs_count += 1
+            db_user.points += sign.pontos
     
-    db_user.points += points_to_add
-
-    try:
-        await db.commit()
-        await db.refresh(db_user)
-        logger.info(
-            "Módulo ID %d adicionado para '%s'. %d novos sinais aprendidos. %d pontos ganhos.",
-            module_id, user.username, new_signs_count, points_to_add
-        )
-        return db_user
-    except Exception as e:
-        await db.rollback()
-        logger.error("Erro ao adicionar módulo concluído para o usuário '%s': %s", user.username, e)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Não foi possível adicionar o módulo.")
+    await db.commit()
+    await db.refresh(db_user)
+    
+    logger.info(f"Module {module_id} added to user {user.id}. New points: {db_user.points}")
+    return db_user
 
 async def add_known_sign_to_user(db: AsyncSession, user: User, sign_id: int) -> User:
-    """Adiciona um sinal à lista de sinais conhecidos de um usuário e soma os pontos."""
-    logger.debug("Adicionando sinal ID %d para o usuário '%s'", sign_id, user.username)
-
-    sign_to_add = await db.get(Sign, sign_id)
+    result = await db.execute(
+        select(Sign).filter(Sign.id == sign_id)
+    )
+    sign_to_add = result.scalars().first()
+    
     if not sign_to_add:
-        logger.warning("Sinal com ID %d não encontrado.", sign_id)
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sinal não encontrado.")
-
-    db_user = await db.get(User, user.id, options=[selectinload(User.known_signs)])
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Sign with ID {sign_id} not found."
+        )
+    
+    result = await db.execute(
+        select(User)
+        .options(selectinload(User.known_signs))
+        .filter(User.id == user.id)
+    )
+    db_user = result.scalars().first()
+    
     if not db_user:
-         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado.")
-
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found."
+        )
+    
     if sign_to_add in db_user.known_signs:
-        logger.info("Usuário '%s' já conhece o sinal ID %d.", user.username, sign_id)
+        logger.info(f"Sign {sign_id} already known by user {user.id}")
         return db_user
-
+    
     db_user.known_signs.append(sign_to_add)
     db_user.points += sign_to_add.pontos
-
-    try:
-        await db.commit()
-        await db.refresh(db_user)
-        logger.info(
-            "Sinal ID %d adicionado para '%s'. %d pontos ganhos.",
-            sign_id, user.username, sign_to_add.pontos
-        )
-        return db_user
-    except Exception as e:
-        await db.rollback()
-        logger.error("Erro ao adicionar sinal conhecido para o usuário '%s': %s", user.username, e)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Não foi possível adicionar o sinal.")
+    
+    await db.commit()
+    await db.refresh(db_user)
+    
+    logger.info(f"Sign {sign_id} added to user {user.id}. New points: {db_user.points}")
+    return db_user
 
 async def get_user_known_signs(db: AsyncSession, user: User) -> List[Sign]:
-    """Retorna a lista de sinais conhecidos por um usuário."""
     logger.debug("Buscando sinais conhecidos do usuário '%s'", user.username)
     result = await db.execute(
         select(User).options(selectinload(User.known_signs)).where(User.id == user.id)
     )
-    user_with_signs = result.scalars().one()
+    user_with_signs = result.scalars().first()
+    
+    if not user_with_signs:
+        return []
+    
     return user_with_signs.known_signs
 
 async def get_user_completed_modules(db: AsyncSession, user: User) -> List[Module]:
-    """Retorna a lista de módulos concluídos por um usuário."""
     logger.debug("Buscando módulos concluídos do usuário '%s'", user.username)
     result = await db.execute(
         select(User).options(selectinload(User.completed_modules)).where(User.id == user.id)
     )
-    user_with_modules = result.scalars().one()
+    user_with_modules = result.scalars().first()
+    
+    if not user_with_modules:
+        return []
+    
     return user_with_modules.completed_modules
     
 async def update_user_username(db: AsyncSession, user: User, new_username: str) -> User:
-    """Atualiza o nome de usuário (username) de um usuário."""
     logger.debug("Tentando atualizar username do usuário ID %d para '%s'", user.id, new_username)
     
     existing_user_result = await db.execute(select(User).where(User.username == new_username))
@@ -250,7 +235,6 @@ async def update_user_username(db: AsyncSession, user: User, new_username: str) 
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Não foi possível atualizar o nome de usuário.")
 
 async def update_user_password(db: AsyncSession, user: User, new_password: str) -> User:
-    """Atualiza a senha de um usuário."""
     logger.debug("Atualizando a senha para o usuário '%s'", user.username)
     user.password = get_password_hash(new_password)
     try:
@@ -264,7 +248,6 @@ async def update_user_password(db: AsyncSession, user: User, new_password: str) 
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Não foi possível atualizar a senha.")
 
 async def get_modules(db: AsyncSession, name: str) -> Module | None:
-    """Busca um módulo pelo nome e retorna o módulo com a lista de sinais associados."""
     logger.debug("Buscando módulo pelo nome: %s", name)
     stmt = (
         select(Module)
@@ -280,5 +263,3 @@ async def get_modules(db: AsyncSession, name: str) -> Module | None:
         logger.warning("Módulo com nome '%s' não encontrado.", name)
 
     return module
-
-

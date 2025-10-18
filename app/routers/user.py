@@ -280,6 +280,8 @@ async def add_known_sign(
     )
     return updated_user
 
+
+
 @router.get(
     "/users/me/modules",
     response_model=List[ModuleRead],
