@@ -37,11 +37,29 @@ async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-TFLITE_MODEL_PATH = 'asl_action_recognizer.tflite'
+
+H5_MODEL_PATH = 'asl_action_recognizer.h5'
 POSE_MODEL_PATH = 'pose_landmarker_lite.task'
 HAND_MODEL_PATH = 'hand_landmarker.task'
 
-if not all(os.path.exists(p) for p in [TFLITE_MODEL_PATH, POSE_MODEL_PATH, HAND_MODEL_PATH]):
+
+for base_path in ['/app', '/app/models', '.']:
+    if all(os.path.exists(os.path.join(base_path, f)) for f in [
+        'asl_action_recognizer.h5',
+        'pose_landmarker_lite.task',
+        'hand_landmarker.task'
+    ]):
+        H5_MODEL_PATH = os.path.join(base_path, 'asl_action_recognizer.h5')
+        POSE_MODEL_PATH = os.path.join(base_path, 'pose_landmarker_lite.task')
+        HAND_MODEL_PATH = os.path.join(base_path, 'hand_landmarker.task')
+        print(f"✓ Models found in {base_path}")
+        break
+else:
+    print(f"✗ Model files not found in any of: /app, /app/models, .")
+    print(f"  Looking for: asl_action_recognizer.h5, pose_landmarker_lite.task, hand_landmarker.task")
+    print(f"  Current working directory: {os.getcwd()}")
+    if os.path.exists('/app'):
+        print(f"  Contents of /app: {os.listdir('/app')}")
     raise RuntimeError("Error: One or more model files are missing.")
 
 ACTIONS = np.array(['obrigado', 'null'])
@@ -49,13 +67,14 @@ SEQUENCE_LENGTH = 100
 CONFIDENCE_THRESHOLD = 0.75
 
 try:
-    interpreter = tf.lite.Interpreter(model_path=TFLITE_MODEL_PATH)
-    interpreter.allocate_tensors()
-    input_details = interpreter.get_input_details()
-    output_details = interpreter.get_output_details()
-    logger.info("TensorFlow Lite model loaded successfully.")
+    
+    keras_module = getattr(tf, 'keras')
+    model = keras_module.models.load_model(H5_MODEL_PATH)
+    logger.info("TensorFlow Keras model loaded successfully.")
+    logger.info(f"Model input shape: {model.input_shape}")
+    logger.info(f"Model output shape: {model.output_shape}")
 except Exception as e:
-    raise RuntimeError(f"Error loading TFLite model: {e}")
+    raise RuntimeError(f"Error loading Keras model: {e}")
 
 base_options = python.BaseOptions
 PoseLandmarker = vision.PoseLandmarker
@@ -80,6 +99,7 @@ logger.info("MediaPipe landmarkers created successfully.")
 
 
 def extract_keypoints(pose_result, hand_result):
+    """Extract keypoints from pose and hand landmarks."""
     pose = np.array([[res.x, res.y, res.z, res.visibility] for res in pose_result.pose_landmarks[0]]).flatten() if pose_result.pose_landmarks else np.zeros(33 * 4)
     lh, rh = np.zeros(21 * 3), np.zeros(21 * 3)
     if hand_result.hand_landmarks:
@@ -91,8 +111,8 @@ def extract_keypoints(pose_result, hand_result):
                 rh = np.array([[res.x, res.y, res.z] for res in hand_landmarks]).flatten()
     return np.concatenate([pose, lh, rh])
 
-
 def process_video(video_hex: str, expected_action: str) -> dict:
+    """Process video and predict ASL action."""
     try:
         video_content = bytes.fromhex(video_hex)
         
@@ -127,6 +147,7 @@ def process_video(video_hex: str, expected_action: str) -> dict:
         if not frame_landmarks:
             return {"action_found": False, "error": "Could not extract frames or landmarks"}
 
+    
         if len(frame_landmarks) >= SEQUENCE_LENGTH:
             indices = np.linspace(0, len(frame_landmarks) - 1, SEQUENCE_LENGTH, dtype=int)
             final_sequence = np.array([frame_landmarks[i] for i in indices])
@@ -137,10 +158,8 @@ def process_video(video_hex: str, expected_action: str) -> dict:
 
         input_data = np.expand_dims(final_sequence, axis=0).astype(np.float32)
         
-        interpreter.set_tensor(input_details[0]['index'], input_data)
-        interpreter.invoke()
-        output_data = interpreter.get_tensor(output_details[0]['index'])
-        prediction = output_data[0]
+        
+        prediction = model.predict(input_data, verbose=0)[0]  # type: ignore
         
         predicted_action = ACTIONS[np.argmax(prediction)]
         confidence = float(prediction[np.argmax(prediction)])
@@ -161,6 +180,7 @@ def process_video(video_hex: str, expected_action: str) -> dict:
 
 
 async def process_message(message: aio_pika.abc.AbstractIncomingMessage, db: AsyncSession) -> None:
+    """Process incoming RabbitMQ message."""
     async with message.process():
         try:
             body = json.loads(message.body.decode())
@@ -211,6 +231,7 @@ async def process_message(message: aio_pika.abc.AbstractIncomingMessage, db: Asy
 
 
 async def main():
+    """Main worker loop."""
     await init_db()
     
     db = SessionLocal()
@@ -242,3 +263,6 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         logger.info("Worker stopped")
+
+
+        

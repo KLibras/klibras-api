@@ -12,7 +12,7 @@ from app.core.config import settings
 from datetime import datetime
 import logging
 
-router = APIRouter(prefix="/api/video", tags=["video"])
+router = APIRouter()
 logger = logging.getLogger(__name__)
 
 async def get_rabbitmq_connection():

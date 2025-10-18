@@ -1,4 +1,3 @@
-*.tflite
 *.pyc
 .vscode/
 __pycache__/
