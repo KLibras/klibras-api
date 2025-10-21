@@ -239,7 +239,14 @@ async def current_user(current_user: User = Depends(get_current_user)):
     """
     Retorna os dados do usuário autenticado atualmente.
     """
-    return current_user
+    
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "username": current_user.username,
+        "points": current_user.points,
+        "signs_count": len(current_user.known_signs) 
+    }
 
 
 @router.post(
