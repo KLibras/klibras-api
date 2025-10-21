@@ -14,13 +14,11 @@ from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
-# Imports para a autenticação com Google
 from google.oauth2 import id_token
 from google.auth.transport import requests
 
 from app.schemas.enums import UserRole
 from app.services import user_service
-# --- MODIFICADO: Importa os schemas necessários ---
 from app.schemas.user import UserCreate, UserRead
 from app.schemas.token import Token
 from app.schemas.sign import SignRead
@@ -31,7 +29,6 @@ from app.core.security import (
     create_refresh_token,
     get_subject_from_token,
 )
-# Importa as configurações centralizadas
 from app.core.config import settings
 from app.models.user import User
 from app.models.sign import Sign
@@ -42,7 +39,6 @@ router = APIRouter()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
-# --- Modelos para receber o token do Google e dados de update ---
 class GoogleToken(BaseModel):
     id_token: str
 
@@ -68,27 +64,22 @@ async def google_auth(token: GoogleToken, db: AsyncSession = Depends(get_db)):
         if not email:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="E-mail não encontrado no token.")
 
-        # Verifica se o usuário já existe na sua base de dados
         user = await user_service.get_user_by_email(db, email=email)
 
         if not user:
             logger.info("Usuário com e-mail %s não encontrado. Criando novo usuário.", email)
-            # Lógica para criar um nome de usuário a partir do nome do Google
             google_name = idinfo.get("name", "")
             sanitized_username = google_name.replace(" ", "").lower()[:15]
             
-            # Cria a estrutura do novo usuário
             user_in = UserCreate(
                 email=email,
                 username=sanitized_username,
-                # Usa o 'sub' (ID único do Google) como senha
                 password=idinfo.get("sub"),
                 points=0,
                 role=UserRole.USER
             )
             user = await user_service.register_user(db=db, user_in=user_in)
 
-        # Se o usuário já existia ou foi criado com sucesso, gera os tokens da sua API
         logger.info("Gerando tokens para o usuário: %s", user.email)
         access_token = create_access_token(data={"sub": str(user.email)})
         refresh_token = create_refresh_token(data={"sub": str(user.email)})
@@ -140,8 +131,6 @@ async def register(
         logger.error("A criação de usuário falhou inesperadamente para %s.", user_in.email)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Falha ao criar usuário.")
     
-    # background_tasks.add_task(user_service.run_welcome_email_task, str(usuario.email))
-
     logger.info("Usuário %s registrado com sucesso. E-mail de boas-vindas na fila.", usuario.email)
     return usuario
 
@@ -235,17 +224,21 @@ async def get_leaderboard(
     return leaderboard_data
 
 @router.get("/users/me", response_model=UserRead)
-async def current_user(current_user: User = Depends(get_current_user)):
+async def current_user(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     """
     Retorna os dados do usuário autenticado atualmente.
     """
+    known_signs = await user_service.get_user_known_signs(db=db, user=current_user)
     
     return {
         "id": current_user.id,
         "email": current_user.email,
         "username": current_user.username,
         "points": current_user.points,
-        "signs_count": len(current_user.known_signs) 
+        "signs_count": len(known_signs)
     }
 
 
@@ -374,10 +367,8 @@ async def get_module_by_name(
     - Retorna o módulo e seus sinais se encontrado.
     - Retorna um erro 404 Not Found se o módulo não existir.
     """
-    # Chama a função do CRUD passando a sessão e o nome do módulo
     module = await user_service.get_modules(db=db, name=name)
 
-    # Se a função retornar None, significa que o módulo não foi encontrado
     if not module:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
