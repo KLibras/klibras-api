@@ -1,3 +1,9 @@
+"""
+ Criação do worker do RabbitMQ e funções de reconhecimento dos sinais
+
+"""
+
+
 import asyncio
 import json
 import aio_pika
@@ -38,9 +44,9 @@ async def init_db():
         await conn.run_sync(Base.metadata.create_all)
 
 
-H5_MODEL_PATH = 'asl_action_recognizer.h5'
-POSE_MODEL_PATH = 'pose_landmarker_lite.task'
-HAND_MODEL_PATH = 'hand_landmarker.task'
+H5_MODEL_PATH = 'asl_action_recognizer.h5' # Modelo Keras
+POSE_MODEL_PATH = 'pose_landmarker_lite.task' # Terefa de reconhecimento de pose
+HAND_MODEL_PATH = 'hand_landmarker.task' # Tarefas de reconhecimento da mão
 
 
 for base_path in ['/app', '/app/models', '.']:
@@ -62,9 +68,9 @@ else:
         print(f"  Contents of /app: {os.listdir('/app')}")
     raise RuntimeError("Error: One or more model files are missing.")
 
-ACTIONS = np.array(['obrigado', 'null'])
+ACTIONS = np.array(['obrigado', 'tudo_bem', "qual_seu_nome", 'bom_dia', 'null']) # Lista de ações
 SEQUENCE_LENGTH = 100
-CONFIDENCE_THRESHOLD = 0.75
+CONFIDENCE_THRESHOLD = 0.75 # Define a porcetagem necessária para o sinal ser reconhecido
 
 try:
     

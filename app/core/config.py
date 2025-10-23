@@ -1,3 +1,9 @@
+""""
+    Define configurações que serão utilizadas na api
+"""
+
+
+
 import os
 from dotenv import load_dotenv
 
