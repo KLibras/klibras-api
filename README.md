@@ -457,18 +457,7 @@ Contribuições são bem-vindas! Por favor, siga estes passos:
 - Use type hints em todas as funções
 - Execute formatadores antes de commitar:
 
-```bash
-# Formatar código
-black app/
 
-# Lint
-flake8 app/
-
-# Type checking
-mypy app/
-```
-
----
 
 ## Licença
 

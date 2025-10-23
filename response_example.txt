@@ -1,8 +1,0 @@
-
--- Request Example
-curl -X 'POST'   '{url}/check_action/'   -H 'accept: application/json'   -H 'Content-Type: multipart/form-data'   -F 'expected_action={expected_sign}'   -F 'video={sign_video/url}'
-
-
-
--- Response example
-{"action_found":true,"predicted_action":"obrigado","confidence":"99.10%","expected_action":"obrigado","is_match":true}parallax@debian:~/IdeaProjects/train_model$ 
