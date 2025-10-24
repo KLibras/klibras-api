@@ -2,8 +2,6 @@
     Define configurações que serão utilizadas na api
 """
 
-
-
 import os
 from dotenv import load_dotenv
 
@@ -25,6 +23,12 @@ def get_env_variable(name: str) -> str:
         EnvironmentError: Se a variável de ambiente especificada não for encontrada.
     """
     value = os.environ.get(name)
+    
+    # DEBUG: Print GOOGLE_CLIENT_ID to verify it's loaded
+    if name == "GOOGLE_CLIENT_ID":
+        print(f"🔍 DEBUG GOOGLE_CLIENT_ID: '{value}'")
+        print(f"🔍 Length: {len(value) if value else 0}")
+    
     if value is None:
         raise EnvironmentError(f"Missing required environment variable: {name}")
     return value
