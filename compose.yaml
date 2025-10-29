@@ -54,7 +54,7 @@ services:
       ACCESS_TOKEN_LIFETIME: 30
       LONG_REFRESH_TOKEN_LIFETIME: 10080
       SHORT_REFRESH_TOKEN_LIFETIME: 1440
-      GOOGLE_CLIENT_ID: ""
+      GOOGLE_CLIENT_ID: 179236694177-48ea7egbntsa83pr0mv8qd4l8va5c4jn.apps.googleusercontent.com
 
   worker:
     build: .
@@ -75,7 +75,7 @@ services:
       ACCESS_TOKEN_LIFETIME: 30
       LONG_REFRESH_TOKEN_LIFETIME: 10080
       SHORT_REFRESH_TOKEN_LIFETIME: 1440
-      GOOGLE_CLIENT_ID: ""
+      GOOGLE_CLIENT_ID: 179236694177-48ea7egbntsa83pr0mv8qd4l8va5c4jn.apps.googleusercontent.com
     command: python -m app.core.worker
 
 volumes:

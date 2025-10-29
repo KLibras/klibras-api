@@ -100,7 +100,7 @@ websockets==15.0.1
 google-auth
 python-multipart
 mediapipe
-tensorflow-cpu # Mudar para o tensorflow quando for dar deploy
+tensorflow
 opencv-python-headless
 aio-pika
 gunicorn
