@@ -10,6 +10,7 @@ import tempfile
 import os
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
+from typing import Optional
 
 warnings.filterwarnings("ignore", category=UserWarning, module='google.protobuf.symbol_database')
 
@@ -26,27 +27,51 @@ ACTIONS = np.array(['obrigado', 'null'])
 SEQUENCE_LENGTH = 100
 CONFIDENCE_THRESHOLD = 0.75
 
-try:
-    model = tf.keras.models.load_model(H5_MODEL_PATH) # type: ignore
-    print("TensorFlow model loaded successfully.")
-except Exception as e:
-    raise RuntimeError(f"Error loading Keras model: {e}")
+# Lazy loading with singleton pattern for better performance
+_model: Optional[tf.keras.Model] = None
+_pose_landmarker: Optional[vision.PoseLandmarker] = None
+_hand_landmarker: Optional[vision.HandLandmarker] = None
 
-base_options = python.BaseOptions
-PoseLandmarker = vision.PoseLandmarker
-PoseLandmarkerOptions = vision.PoseLandmarkerOptions
-HandLandmarker = vision.HandLandmarker
-HandLandmarkerOptions = vision.HandLandmarkerOptions
-VisionRunningMode = vision.RunningMode
 
-pose_options = PoseLandmarkerOptions(
-    base_options=base_options(model_asset_path=POSE_MODEL_PATH), running_mode=VisionRunningMode.IMAGE)
-hand_options = HandLandmarkerOptions(
-    base_options=base_options(model_asset_path=HAND_MODEL_PATH), running_mode=VisionRunningMode.IMAGE, num_hands=2)
+def get_model():
+    """Lazy load TensorFlow model (singleton pattern)"""
+    global _model
+    if _model is None:
+        try:
+            _model = tf.keras.models.load_model(H5_MODEL_PATH)  # type: ignore
+            print("TensorFlow model loaded successfully.")
+        except Exception as e:
+            raise RuntimeError(f"Error loading Keras model: {e}")
+    return _model
 
-pose_landmarker = PoseLandmarker.create_from_options(pose_options)
-hand_landmarker = HandLandmarker.create_from_options(hand_options)
-print("MediaPipe landmarkers created successfully.")
+
+def get_landmarkers():
+    """Lazy load MediaPipe landmarkers (singleton pattern)"""
+    global _pose_landmarker, _hand_landmarker
+    
+    if _pose_landmarker is None or _hand_landmarker is None:
+        base_options = python.BaseOptions
+        PoseLandmarker = vision.PoseLandmarker
+        PoseLandmarkerOptions = vision.PoseLandmarkerOptions
+        HandLandmarker = vision.HandLandmarker
+        HandLandmarkerOptions = vision.HandLandmarkerOptions
+        VisionRunningMode = vision.RunningMode
+
+        pose_options = PoseLandmarkerOptions(
+            base_options=base_options(model_asset_path=POSE_MODEL_PATH),
+            running_mode=VisionRunningMode.IMAGE
+        )
+        hand_options = HandLandmarkerOptions(
+            base_options=base_options(model_asset_path=HAND_MODEL_PATH),
+            running_mode=VisionRunningMode.IMAGE,
+            num_hands=2
+        )
+
+        _pose_landmarker = PoseLandmarker.create_from_options(pose_options)
+        _hand_landmarker = HandLandmarker.create_from_options(hand_options)
+        print("MediaPipe landmarkers created successfully.")
+    
+    return _pose_landmarker, _hand_landmarker
 
 
 def extract_keypoints(pose_result, hand_result):
@@ -83,6 +108,10 @@ async def process_video_and_predict_action(expected_action: str, video: UploadFi
     """
     if not video.filename or not video.filename.lower().endswith('.mp4'):
         raise HTTPException(status_code=400, detail="Invalid file type. Please upload an MP4 video.")
+
+    # Get models using lazy loading
+    model = get_model()
+    pose_landmarker, hand_landmarker = get_landmarkers()
 
     temp_video_path = ""
     with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_video:
