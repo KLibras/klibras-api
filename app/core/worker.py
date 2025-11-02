@@ -4,6 +4,7 @@
 
 import asyncio
 import json
+import base64
 import aio_pika
 import logging
 import cv2
@@ -187,7 +188,7 @@ def detect_all_parallel(mp_image):
         )
 
 
-def process_video(video_hex: str, expected_action: str) -> dict:
+def process_video(video_base64: str, expected_action: str) -> dict:
     """
     Processa o vídeo com otimização de GPU mantendo a precisão.
     - Extrai ~70 frames de um vídeo típico de 90 frames
@@ -196,7 +197,7 @@ def process_video(video_hex: str, expected_action: str) -> dict:
     - Detecção paralela para processamento mais rápido
     """
     try:
-        video_content = bytes.fromhex(video_hex)
+        video_content = base64.b64decode(video_base64)
         
         with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_video:
             temp_video.write(video_content)
