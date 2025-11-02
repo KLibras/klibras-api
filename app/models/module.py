@@ -18,7 +18,7 @@ class Module(Base):
     __tablename__ = 'modules'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(50), nullable=False)
+    name: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     
     signs: Mapped[List["Sign"]] = relationship(
         secondary=module_sign_association,

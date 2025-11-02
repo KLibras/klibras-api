@@ -101,12 +101,17 @@ async def authenticate_user(db: AsyncSession, email: str, password: str) -> User
 
 async def get_users_leaderboard(db:AsyncSession) -> List[User]: 
     logger.info("Tentando pegar o ranking dos usuários")
-    stmt = select(User).order_by(desc(User.points))
+    stmt = (
+        select(User)
+        .options(selectinload(User.known_signs))
+        .order_by(desc(User.points))
+    )
     result = await db.execute(stmt)
     leaderboard = result.scalars().all()
     return list(leaderboard)
 
 async def add_completed_module_to_user(db: AsyncSession, user: User, module_id: int) -> User:
+    # Fetch module with signs and user with relationships in a single optimized query
     result = await db.execute(
         select(Module)
         .options(selectinload(Module.signs))
@@ -120,38 +125,25 @@ async def add_completed_module_to_user(db: AsyncSession, user: User, module_id: 
             detail=f"Module with ID {module_id} not found."
         )
     
-    result = await db.execute(
-        select(User)
-        .options(
-            selectinload(User.completed_modules),
-            selectinload(User.known_signs)
-        )
-        .filter(User.id == user.id)
-    )
-    db_user = result.scalars().first()
+    # Refresh the user object to get latest relationships
+    await db.refresh(user, ["completed_modules", "known_signs"])
     
-    if not db_user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found."
-        )
-    
-    if module_to_add in db_user.completed_modules:
+    if module_to_add in user.completed_modules:
         logger.info(f"Module {module_id} already completed by user {user.id}")
-        return db_user
+        return user
     
-    db_user.completed_modules.append(module_to_add)
+    user.completed_modules.append(module_to_add)
     
     for sign in module_to_add.signs:
-        if sign not in db_user.known_signs:
-            db_user.known_signs.append(sign)
-            db_user.points += sign.pontos
+        if sign not in user.known_signs:
+            user.known_signs.append(sign)
+            user.points += sign.pontos
     
     await db.commit()
-    await db.refresh(db_user)
+    await db.refresh(user)
     
-    logger.info(f"Module {module_id} added to user {user.id}. New points: {db_user.points}")
-    return db_user
+    logger.info(f"Module {module_id} added to user {user.id}. New points: {user.points}")
+    return user
 
 async def add_known_sign_to_user(db: AsyncSession, user: User, sign_id: int) -> User:
     result = await db.execute(
@@ -165,31 +157,21 @@ async def add_known_sign_to_user(db: AsyncSession, user: User, sign_id: int) -> 
             detail=f"Sign with ID {sign_id} not found."
         )
     
-    result = await db.execute(
-        select(User)
-        .options(selectinload(User.known_signs))
-        .filter(User.id == user.id)
-    )
-    db_user = result.scalars().first()
+    # Refresh the user object to get latest relationships
+    await db.refresh(user, ["known_signs"])
     
-    if not db_user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found."
-        )
-    
-    if sign_to_add in db_user.known_signs:
+    if sign_to_add in user.known_signs:
         logger.info(f"Sign {sign_id} already known by user {user.id}")
-        return db_user
+        return user
     
-    db_user.known_signs.append(sign_to_add)
-    db_user.points += sign_to_add.pontos
+    user.known_signs.append(sign_to_add)
+    user.points += sign_to_add.pontos
     
     await db.commit()
-    await db.refresh(db_user)
+    await db.refresh(user)
     
-    logger.info(f"Sign {sign_id} added to user {user.id}. New points: {db_user.points}")
-    return db_user
+    logger.info(f"Sign {sign_id} added to user {user.id}. New points: {user.points}")
+    return user
 
 async def get_user_known_signs(db: AsyncSession, user: User) -> List[Sign]:
     logger.debug("Buscando sinais conhecidos do usuário '%s'", user.username)

@@ -43,10 +43,12 @@ async def check_action(
             channel = await connection.channel()
             queue = await channel.declare_queue('video_processing_queue', durable=True)
             
+            # Use base64 encoding instead of hex - more efficient (75% of hex size)
+            import base64
             message_body = {
                 "job_id": job_id,
                 "expected_action": expected_action,
-                "video_content": video_content.hex(),
+                "video_content": base64.b64encode(video_content).decode('utf-8'),
                 "user_id": current_user.id
             }
             
@@ -94,6 +96,8 @@ async def get_job_result(
     
     if wait:
         start_time = asyncio.get_event_loop().time()
+        poll_delay = 0.1  # Start with 100ms delay
+        max_poll_delay = 2.0  # Maximum 2s between polls
         
         while True:
             db.expire_all()
@@ -144,7 +148,9 @@ async def get_job_result(
                     "completedAt": None
                 }
             
-            await asyncio.sleep(0.5)
+            # Exponential backoff for polling
+            await asyncio.sleep(poll_delay)
+            poll_delay = min(poll_delay * 1.5, max_poll_delay)
     
     else:
         result = await db.execute(
