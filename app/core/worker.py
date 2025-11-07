@@ -66,7 +66,7 @@ async def init_db():
         await conn.run_sync(Base.metadata.create_all)
 
 # Caminhos dos modelos
-H5_MODEL_PATH = 'asl_action_recognizer.h5'
+H5_MODEL_PATH = 'klibras_model.h5'
 POSE_MODEL_PATH = 'pose_landmarker_lite.task'
 HAND_MODEL_PATH = 'hand_landmarker.task'
 FACE_MODEL_PATH = 'face_landmarker.task'
@@ -74,12 +74,12 @@ FACE_MODEL_PATH = 'face_landmarker.task'
 # Encontrar modelos
 for base_path in ['/app', '/app/models', '.']:
     if all(os.path.exists(os.path.join(base_path, f)) for f in [
-        'asl_action_recognizer.h5',
+        'klibras_model.h5',
         'pose_landmarker_lite.task',
         'hand_landmarker.task',
         'face_landmarker.task'
     ]):
-        H5_MODEL_PATH = os.path.join(base_path, 'asl_action_recognizer.h5')
+        H5_MODEL_PATH = os.path.join(base_path, 'klibras_model.h5')
         POSE_MODEL_PATH = os.path.join(base_path, 'pose_landmarker_lite.task')
         HAND_MODEL_PATH = os.path.join(base_path, 'hand_landmarker.task')
         FACE_MODEL_PATH = os.path.join(base_path, 'face_landmarker.task')
@@ -87,7 +87,7 @@ for base_path in ['/app', '/app/models', '.']:
         break
 else:
     logger.error(f"✗ Arquivos de modelo não encontrados em: /app, /app/models, .")
-    logger.error(f"  Procurando por: asl_action_recognizer.h5, pose_landmarker_lite.task, hand_landmarker.task, face_landmarker.task")
+    logger.error(f"  Procurando por: klibras_model.h5, pose_landmarker_lite.task, hand_landmarker.task, face_landmarker.task")
     logger.error(f"  Diretório de trabalho atual: {os.getcwd()}")
     if os.path.exists('/app'):
         logger.error(f"  Conteúdo de /app: {os.listdir('/app')}")
