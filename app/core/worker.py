@@ -223,6 +223,9 @@ def process_video(video_hex: str, expected_action: str) -> dict:
                 if not ret:
                     break
 
+                # Espelhar horizontalmente para corresponder ao treinamento com câmera frontal
+                frame = cv2.flip(frame, 1)
+
                 frame_start = time.time()
 
                 # Reduzir escala para processamento mais rápido
@@ -376,6 +379,7 @@ async def main():
             logger.info(f"🚀 Worker GPU iniciado em g4dn.2xlarge")
             logger.info(f"    Processando {CONCURRENT_VIDEOS} vídeos concorrentemente")
             logger.info(f"    Marcos faciais completos: 478 pontos (1434 features)")
+            logger.info(f"    Espelhamento horizontal: ATIVADO (câmera frontal)")
 
             async with queue.iterator() as queue_iter:
                 async for message in queue_iter:
