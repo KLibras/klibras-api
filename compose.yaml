@@ -61,6 +61,13 @@ services:
     container_name: klibras_worker
     restart: always
     working_dir: /app
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     depends_on:
       db:
         condition: service_healthy
