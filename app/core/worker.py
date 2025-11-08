@@ -97,7 +97,7 @@ else:
 ACTIONS = np.array(['obrigado', 'tudo_bem', "qual_seu_nome", 'bom_dia', 'null'])
 SEQUENCE_LENGTH = 100  # Manter original - você fará downsample para isto
 TARGET_FRAMES = 70   # Extrair 70 frames de 90 (pular a cada ~1.3 frames)
-CONFIDENCE_THRESHOLD = 0.75
+CONFIDENCE_THRESHOLD = 0.70
 PROCESS_WIDTH = 480  # Reduzir escala para velocidade sem perder detalhes
 MAX_WORKERS = 4  # Threads de detecção paralelas
 CONCURRENT_VIDEOS = 2  # Processar 2 vídeos simultaneamente na T4
