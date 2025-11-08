@@ -94,13 +94,12 @@ else:
     raise RuntimeError("Erro: Um ou mais arquivos de modelo estão faltando.")
 
 # Configuração otimizada para precisão com velocidade razoável
-ACTIONS = np.array(['obrigado', 'tudo_bem', "qual_seu_nome", 'bom_dia', 'null'])
-SEQUENCE_LENGTH = 100  # Manter original - você fará downsample para isto
-TARGET_FRAMES = 70   # Extrair 70 frames de 90 (pular a cada ~1.3 frames)
+ACTIONS = np.array(['obrigado', "tudo_bem", "bom_dia", "qual_seu_nome", 'null'])
+SEQUENCE_LENGTH = 100
 CONFIDENCE_THRESHOLD = 0.70
-PROCESS_WIDTH = 480  # Reduzir escala para velocidade sem perder detalhes
-MAX_WORKERS = 4  # Threads de detecção paralelas
-CONCURRENT_VIDEOS = 2  # Processar 2 vídeos simultaneamente na T4
+PROCESS_WIDTH = 480
+MAX_WORKERS = 4
+CONCURRENT_VIDEOS = 2
 
 # Carregar modelo Keras
 try:
@@ -190,7 +189,7 @@ def detect_all_parallel(mp_image):
 def process_video(video_hex: str, expected_action: str) -> dict:
     """
     Processa o vídeo com otimização de GPU mantendo a precisão.
-    - Extrai ~70 frames de um vídeo típico de 90 frames
+    - Extrai todos os frames do vídeo
     - Usa marcos faciais completos para precisão
     - Reduz a escala para 480px de largura para velocidade
     - Detecção paralela para processamento mais rápido
@@ -211,21 +210,10 @@ def process_video(video_hex: str, expected_action: str) -> dict:
             if not cap.isOpened():
                 return {"action_found": False, "error": "Não foi possível abrir o arquivo de vídeo"}
 
-            # Obter propriedades do vídeo
             fps = cap.get(cv2.CAP_PROP_FPS)
             total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             
-            # Calcular quais frames processar para obter ~70 frames
-            # Se 90 frames, processar índices [0, 1, 3, 4, 6, 7, 9...] (pular a cada ~1.3)
-            if total_frames <= TARGET_FRAMES:
-                frame_indices_to_process = set(range(total_frames))
-            else:
-                # Usar linspace para amostrar uniformemente TARGET_FRAMES do total_frames
-                frame_indices_to_process = set(
-                    np.linspace(0, total_frames - 1, TARGET_FRAMES, dtype=int)
-                )
-            
-            logger.info(f"Vídeo: {fps:.1f}fps, {total_frames} frames → processando {len(frame_indices_to_process)} frames")
+            logger.info(f"Vídeo: {fps:.1f}fps, {total_frames} frames → processando todos os frames")
 
             frame_count = 0
             extraction_times = []
@@ -234,11 +222,6 @@ def process_video(video_hex: str, expected_action: str) -> dict:
                 ret, frame = cap.read()
                 if not ret:
                     break
-
-                # Processar apenas os frames selecionados
-                if frame_count not in frame_indices_to_process:
-                    frame_count += 1
-                    continue
 
                 frame_start = time.time()
 
@@ -392,7 +375,6 @@ async def main():
 
             logger.info(f"🚀 Worker GPU iniciado em g4dn.2xlarge")
             logger.info(f"    Processando {CONCURRENT_VIDEOS} vídeos concorrentemente")
-            logger.info(f"    Frames alvo: {TARGET_FRAMES} por vídeo")
             logger.info(f"    Marcos faciais completos: 478 pontos (1434 features)")
 
             async with queue.iterator() as queue_iter:
