@@ -96,7 +96,7 @@ else:
 # Configuração otimizada para precisão com velocidade razoável
 ACTIONS = np.array(['obrigado', "tudo_bem", "bom_dia", "qual_seu_nome", 'null'])
 SEQUENCE_LENGTH = 100
-CONFIDENCE_THRESHOLD = 0.70
+CONFIDENCE_THRESHOLD = 0.50
 PROCESS_WIDTH = 480
 MAX_WORKERS = 4
 CONCURRENT_VIDEOS = 2
