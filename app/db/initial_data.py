@@ -63,7 +63,7 @@ async def create_initial_data(db: AsyncSession):
         # 3. Crie os Módulos e associe os Sinais a eles
         module_cumprimentos = Module(
             name="introducao",
-            signs=[sign_bom_dia, sign_obrigado, sign_tudo_bem, sign_qual_seu_nome]
+            signs=[sign_obrigado, sign_tudo_bem, sign_qual_seu_nome, sign_bom_dia]
         )
         
         db.add(module_cumprimentos)
