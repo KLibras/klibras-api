@@ -33,7 +33,7 @@ async def create_initial_data(db: AsyncSession):
         sign_obrigado = Sign(
             name="Obrigado",
             desc="Este sinal é realizado com as duas mãos.<br><br>" \
-                "Posicione a mão direita tocando o queixo e a mão esquerda tocando a testa. Depois, mova <b>ambas as mãos</b> para a frente, em um gesto de oferecimento.",
+                "Posicione a mão esquerda tocando o queixo e a mão direita tocando a testa. Depois, mova <b>ambas as mãos</b> para a frente, em um gesto de oferecimento.",
             videoUrl="obrigado",
             pontos=10
         )
