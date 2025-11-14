@@ -57,7 +57,7 @@ async def create_initial_data(db: AsyncSession):
 
         
 
-        db.add_all([sign_bom_dia, sign_obrigado, sign_tudo_bem, sign_qual_seu_nome])
+	db.add_all([sign_obrigado, sign_bom_dia, sign_tudo_bem, sign_qual_seu_nome])
         await db.flush() # Usa flush para obter os IDs antes do commit
 
         # 3. Crie os Módulos e associe os Sinais a eles
