@@ -1,5 +1,5 @@
 # Use NVIDIA CUDA base image instead of slim
-FROM nvidia/cuda:12.2.0-runtime-ubuntu22.04
+FROM nvidia/cuda:12.2.0-devel-ubuntu22.04
 
 # Install Python 3.11 and pip
 RUN apt-get update && apt-get install -y --no-install-recommends \
