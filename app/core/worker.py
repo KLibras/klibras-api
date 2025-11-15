@@ -20,7 +20,10 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
 from app.db.models.processing_job import ProcessingJob, Base
+from app.models.user import User
+from app.models.sign import Sign
 from app.core.config import settings
 
 warnings.filterwarnings("ignore", category=UserWarning, module='google.protobuf.symbol_database')
@@ -311,6 +314,7 @@ async def process_message(message: aio_pika.abc.AbstractIncomingMessage, db: Asy
             job_id = body.get("job_id")
             expected_action = body.get("expected_action")
             video_content = body.get("video_content")
+            user_id = body.get("user_id")
 
             logger.info(f"Processando job {job_id} para a ação: {expected_action}")
 
@@ -322,6 +326,30 @@ async def process_message(message: aio_pika.abc.AbstractIncomingMessage, db: Asy
             job = db_result.scalars().first()
             
             if job:
+                
+                if result.get("action_found") and user_id and expected_action:
+                    logger.info(f"Action '{expected_action}' found for user {user_id}. Attempting to add points.")
+                    
+                    sign_res = await db.execute(select(Sign).filter(Sign.videoUrl == expected_action))
+                    sign_to_add = sign_res.scalars().first()
+                    
+                    user_res = await db.execute(
+                        select(User).options(selectinload(User.known_signs)).filter(User.id == user_id)
+                    )
+                    db_user = user_res.scalars().first()
+
+                    if db_user and sign_to_add:
+                        if sign_to_add not in db_user.known_signs:
+                            db_user.known_signs.append(sign_to_add)
+                            db_user.points += sign_to_add.pontos
+                            logger.info(f"Added {sign_to_add.pontos} points to user {db_user.id} for sign '{sign_to_add.name}'. New total: {db_user.points}")
+                        else:
+                            logger.info(f"User {db_user.id} already knows sign '{sign_to_add.name}'. No points added.")
+                    elif not db_user:
+                        logger.warning(f"Could not find user with ID {user_id} to add points.")
+                    elif not sign_to_add:
+                        logger.warning(f"Could not find sign '{expected_action}' in database to add points.")
+
                 job.status = "completed"
                 job.action_found = result.get("action_found")
                 job.predicted_action = result.get("predicted_action")
@@ -397,4 +425,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logger.info("Worker parado")
+        logger.info("Worker parado")	
