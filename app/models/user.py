@@ -32,9 +32,10 @@ class User(Base):
     password: Mapped[str] = mapped_column(String(100), nullable=False)
     points: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     role: Mapped[UserRole] = mapped_column(SQLAlchemyEnum(UserRole, name="roles_enum"), default=UserRole.USER, nullable=False)
-    
+
     completed_modules: Mapped[List["Module"]] = relationship(
-        secondary=user_module_association, 
+        "Module",
+        secondary=user_module_association,
         back_populates="completed_by_users"
     )
     known_signs: Mapped[List["Sign"]] = relationship(

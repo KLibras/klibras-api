@@ -1,5 +1,5 @@
 """
- Criação do worker do RabbitMQ e funções de reconhecimento dos sinais
+Criação do worker do RabbitMQ e funções de reconhecimento dos sinais
 """
 
 import asyncio
@@ -25,6 +25,7 @@ from app.db.models.processing_job import ProcessingJob, Base
 from app.models.user import User
 from app.models.sign import Sign
 from app.core.config import settings
+from app.services import user_service
 
 warnings.filterwarnings("ignore", category=UserWarning, module='google.protobuf.symbol_database')
 
@@ -34,7 +35,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Configuração da GPU 
+# Configuração da GPU
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
@@ -44,11 +45,11 @@ if gpus:
     try:
         for gpu in gpus:
             tf.config.experimental.set_memory_growth(gpu, True)
-        
+
         # Precisão mista para os Tensor Cores
         policy = tf.keras.mixed_precision.Policy('mixed_float16')
         tf.keras.mixed_precision.set_global_policy(policy)
-        
+
         logger.info(f"GPU disponível: {gpus}")
         logger.info(f"Precisão mista ativada para otimização da T4")
     except RuntimeError as e:
@@ -125,12 +126,12 @@ FaceLandmarkerOptions = vision.FaceLandmarkerOptions
 VisionRunningMode = vision.RunningMode
 
 pose_options = PoseLandmarkerOptions(
-    base_options=base_options(model_asset_path=POSE_MODEL_PATH), 
+    base_options=base_options(model_asset_path=POSE_MODEL_PATH),
     running_mode=VisionRunningMode.IMAGE
 )
 hand_options = HandLandmarkerOptions(
-    base_options=base_options(model_asset_path=HAND_MODEL_PATH), 
-    running_mode=VisionRunningMode.IMAGE, 
+    base_options=base_options(model_asset_path=HAND_MODEL_PATH),
+    running_mode=VisionRunningMode.IMAGE,
     num_hands=2
 )
 face_options = FaceLandmarkerOptions(
@@ -151,27 +152,27 @@ def extract_keypoints_with_face(pose_result, hand_result, face_result):
     Total de features: 132 (pose) + 63 (mão esquerda) + 63 (mão direita) + 1434 (rosto) = 1692
     """
     # Pose: 33 marcos * 4 (x, y, z, visibilidade) = 132
-    pose = np.array([[res.x, res.y, res.z, res.visibility] 
-                        for res in pose_result.pose_landmarks[0]]).flatten() \
-            if pose_result.pose_landmarks else np.zeros(33 * 4)
-    
+    pose = np.array([[res.x, res.y, res.z, res.visibility]
+                     for res in pose_result.pose_landmarks[0]]).flatten() \
+        if pose_result.pose_landmarks else np.zeros(33 * 4)
+
     # Mãos: 21 marcos * 3 (x, y, z) cada = 63 por mão
     lh, rh = np.zeros(21 * 3), np.zeros(21 * 3)
     if hand_result.hand_landmarks:
         for i, hand_landmarks in enumerate(hand_result.hand_landmarks):
             handedness = hand_result.handedness[i][0].category_name
             if handedness == "Left":
-                lh = np.array([[res.x, res.y, res.z] 
-                                for res in hand_landmarks]).flatten()
+                lh = np.array([[res.x, res.y, res.z]
+                               for res in hand_landmarks]).flatten()
             elif handedness == "Right":
-                rh = np.array([[res.x, res.y, res.z] 
-                                for res in hand_landmarks]).flatten()
-    
+                rh = np.array([[res.x, res.y, res.z]
+                               for res in hand_landmarks]).flatten()
+
     # Rosto: 478 marcos * 3 (x, y, z) = 1434 (PRECISÃO TOTAL para toques no queixo, etc.)
-    face = np.array([[res.x, res.y, res.z] 
-                        for res in face_result.face_landmarks[0]]).flatten() \
-            if face_result.face_landmarks else np.zeros(478 * 3)
-    
+    face = np.array([[res.x, res.y, res.z]
+                     for res in face_result.face_landmarks[0]]).flatten() \
+        if face_result.face_landmarks else np.zeros(478 * 3)
+
     return np.concatenate([pose, lh, rh, face])
 
 
@@ -181,7 +182,7 @@ def detect_all_parallel(mp_image):
         pose_future = executor.submit(pose_landmarker.detect, mp_image)
         hand_future = executor.submit(hand_landmarker.detect, mp_image)
         face_future = executor.submit(face_landmarker.detect, mp_image)
-        
+
         return (
             pose_future.result(),
             hand_future.result(),
@@ -199,7 +200,7 @@ def process_video(video_hex: str, expected_action: str) -> dict:
     """
     try:
         video_content = bytes.fromhex(video_hex)
-        
+
         with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_video:
             temp_video.write(video_content)
             temp_video_path = temp_video.name
@@ -207,7 +208,7 @@ def process_video(video_hex: str, expected_action: str) -> dict:
         frame_landmarks = []
         cap = None
         start_time = time.time()
-        
+
         try:
             cap = cv2.VideoCapture(temp_video_path)
             if not cap.isOpened():
@@ -215,12 +216,12 @@ def process_video(video_hex: str, expected_action: str) -> dict:
 
             fps = cap.get(cv2.CAP_PROP_FPS)
             total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            
+
             logger.info(f"Vídeo: {fps:.1f}fps, {total_frames} frames → processando todos os frames")
 
             frame_count = 0
             extraction_times = []
-            
+
             while True:
                 ret, frame = cap.read()
                 if not ret:
@@ -235,20 +236,20 @@ def process_video(video_hex: str, expected_action: str) -> dict:
                 h, w = frame.shape[:2]
                 if w > PROCESS_WIDTH:
                     scale = PROCESS_WIDTH / w
-                    frame = cv2.resize(frame, (PROCESS_WIDTH, int(h * scale)), 
+                    frame = cv2.resize(frame, (PROCESS_WIDTH, int(h * scale)),
                                        interpolation=cv2.INTER_LINEAR)
 
                 # Converter para RGB uma vez
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
-                
+
                 # Detectar todos os landmarks em paralelo
                 pose_result, hand_result, face_result = detect_all_parallel(mp_image)
-                
+
                 # Extrair keypoints com marcos faciais completos
                 keypoints = extract_keypoints_with_face(pose_result, hand_result, face_result)
                 frame_landmarks.append(keypoints)
-                
+
                 extraction_times.append(time.time() - frame_start)
                 frame_count += 1
 
@@ -275,11 +276,11 @@ def process_video(video_hex: str, expected_action: str) -> dict:
 
         # Inferência na GPU com precisão mista
         input_data = np.expand_dims(final_sequence, axis=0).astype(np.float32)
-        
+
         inference_start = time.time()
         prediction = model.predict(input_data, verbose=0)[0]
         inference_time = time.time() - inference_start
-        
+
         predicted_action = ACTIONS[np.argmax(prediction)]
         confidence = float(prediction[np.argmax(prediction)])
 
@@ -319,32 +320,31 @@ async def process_message(message: aio_pika.abc.AbstractIncomingMessage, db: Asy
             logger.info(f"Processando job {job_id} para a ação: {expected_action}")
 
             result = process_video(video_content, expected_action)
-            
+
             db_result = await db.execute(
                 select(ProcessingJob).filter(ProcessingJob.job_id == job_id)
             )
             job = db_result.scalars().first()
-            
+
             if job:
-                
+
                 if result.get("action_found") and user_id and expected_action:
                     logger.info(f"Action '{expected_action}' found for user {user_id}. Attempting to add points.")
-                    
+
                     sign_res = await db.execute(select(Sign).filter(Sign.videoUrl == expected_action))
                     sign_to_add = sign_res.scalars().first()
-                    
+
                     user_res = await db.execute(
                         select(User).options(selectinload(User.known_signs)).filter(User.id == user_id)
                     )
                     db_user = user_res.scalars().first()
 
                     if db_user and sign_to_add:
-                        if sign_to_add not in db_user.known_signs:
-                            db_user.known_signs.append(sign_to_add)
-                            db_user.points += sign_to_add.pontos
-                            logger.info(f"Added {sign_to_add.pontos} points to user {db_user.id} for sign '{sign_to_add.name}'. New total: {db_user.points}")
-                        else:
-                            logger.info(f"User {db_user.id} already knows sign '{sign_to_add.name}'. No points added.")
+                        try:
+                            await user_service.add_known_sign_to_user(db=db, user=db_user, sign_id=sign_to_add.id)
+                            logger.info(f"Added {sign_to_add.pontos} points to user {db_user.id} for sign '{sign_to_add.name}' via user_service.")
+                        except Exception as e:
+                            logger.error(f"Failed to add known sign via user_service: {e}")
                     elif not db_user:
                         logger.warning(f"Could not find user with ID {user_id} to add points.")
                     elif not sign_to_add:
@@ -357,17 +357,16 @@ async def process_message(message: aio_pika.abc.AbstractIncomingMessage, db: Asy
                 job.is_match = result.get("is_match")
                 job.completed_at = datetime.utcnow()
                 job.result = result
-                
+
                 if "error" in result:
                     job.error = result["error"]
-                
+
                 await db.commit()
                 logger.info(f"Job {job_id} concluído em {result.get('total_time_ms')}ms: {result.get('predicted_action')} ({result.get('confidence')})")
 
         except Exception as e:
             logger.error(f"Erro ao processar a mensagem: {str(e)}")
             try:
-                # Tenta marcar o job como falho no DB
                 body = json.loads(message.body.decode())
                 job_id = body.get("job_id")
                 db_result = await db.execute(
@@ -386,15 +385,14 @@ async def process_message(message: aio_pika.abc.AbstractIncomingMessage, db: Asy
 async def main():
     """Loop principal do worker com concorrência otimizada para GPU."""
     await init_db()
-    
-    # Semáforo para limitar o processamento concorrente de vídeos
+
     semaphore = asyncio.Semaphore(CONCURRENT_VIDEOS)
-    
-    async def process_with_semaphore(message, db):
+
+    async def process_with_semaphore(message):
         async with semaphore:
-            await process_message(message, db)
-    
-    db = SessionLocal()
+            async with SessionLocal() as db:
+                await process_message(message, db)
+
     try:
         connection = await aio_pika.connect_robust(settings.rabbitmq_url)
         logger.info("Conectado ao RabbitMQ")
@@ -411,18 +409,18 @@ async def main():
 
             async with queue.iterator() as queue_iter:
                 async for message in queue_iter:
-                    asyncio.create_task(process_with_semaphore(message, db))
+                    asyncio.create_task(process_with_semaphore(message))
 
     except Exception as e:
         logger.error(f"Erro no worker: {str(e)}")
         await asyncio.sleep(5)
-        await main() # Tenta reiniciar
+        await main()
     finally:
-        await db.close()
+        pass
 
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logger.info("Worker parado")	
+        logger.info("Worker parado")

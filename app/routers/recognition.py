@@ -28,10 +28,10 @@ async def get_rabbitmq_connection():
 
 @router.post("/check_action", status_code=status.HTTP_202_ACCEPTED)
 async def check_action(
-    expected_action: str = Form(...),
-    video: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+        expected_action: str = Form(...),
+        video: UploadFile = File(...),
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
 ):
     job_id = str(uuid.uuid4())
     video_content = await video.read()
@@ -42,14 +42,14 @@ async def check_action(
         async with connection:
             channel = await connection.channel()
             queue = await channel.declare_queue('video_processing_queue', durable=True)
-            
+
             message_body = {
                 "job_id": job_id,
                 "expected_action": expected_action,
                 "video_content": video_content.hex(),
                 "user_id": current_user.id
             }
-            
+
             await channel.default_exchange.publish(
                 aio_pika.Message(
                     body=json.dumps(message_body).encode(),
@@ -67,14 +67,14 @@ async def check_action(
         )
         db.add(job)
         await db.commit()
-        
+
         logger.info(f"Job {job_id} queued for processing")
-        
+
         return JSONResponse(
             content={"jobId": job_id, "status": "pending"},
             status_code=status.HTTP_202_ACCEPTED
         )
-    
+
     except Exception as e:
         logger.error(f"Error queuing job: {str(e)}")
         await db.rollback()
@@ -85,19 +85,19 @@ async def check_action(
 
 @router.get("/results/{job_id}")
 async def get_job_result(
-    job_id: str,
-    wait: bool = Query(default=False, description="Wait for job completion (long polling)"),
-    timeout: int = Query(default=10, ge=1, le=120, description="Timeout in seconds for waiting"),
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+        job_id: str,
+        wait: bool = Query(default=False, description="Wait for job completion (long polling)"),
+        timeout: int = Query(default=10, ge=1, le=120, description="Timeout in seconds for waiting"),
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
 ):
-    
+
     if wait:
         start_time = asyncio.get_event_loop().time()
-        
+
         while True:
             db.expire_all()
-            
+
             result = await db.execute(
                 select(ProcessingJob).filter(
                     ProcessingJob.job_id == job_id,
@@ -105,13 +105,13 @@ async def get_job_result(
                 )
             )
             job = result.scalars().first()
-            
+
             if not job:
                 raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND, 
+                    status_code=status.HTTP_404_NOT_FOUND,
                     detail="Job not found"
                 )
-            
+
             if job.status in ["completed", "failed"]:
                 logger.info(f"Job {job_id} finished with status: {job.status}")
                 return {
@@ -126,7 +126,7 @@ async def get_job_result(
                     "createdAt": job.created_at.isoformat() if job.created_at else None,
                     "completedAt": job.completed_at.isoformat() if job.completed_at else None
                 }
-            
+
             elapsed = asyncio.get_event_loop().time() - start_time
             if elapsed > timeout:
                 logger.info(f"Job {job_id} timeout after {elapsed:.2f}s, status: {job.status}")
@@ -143,9 +143,9 @@ async def get_job_result(
                     "createdAt": job.created_at.isoformat() if job.created_at else None,
                     "completedAt": None
                 }
-            
+
             await asyncio.sleep(0.5)
-    
+
     else:
         result = await db.execute(
             select(ProcessingJob).filter(
@@ -154,13 +154,13 @@ async def get_job_result(
             )
         )
         job = result.scalars().first()
-        
+
         if not job:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, 
+                status_code=status.HTTP_404_NOT_FOUND,
                 detail="Job not found"
             )
-        
+
         return {
             "jobId": job.job_id,
             "status": job.status,
@@ -177,10 +177,10 @@ async def get_job_result(
 
 @router.get("/jobs/user/history")
 async def get_user_job_history(
-    limit: int = Query(default=10, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+        limit: int = Query(default=10, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
 ):
     result = await db.execute(
         select(ProcessingJob)
@@ -190,7 +190,7 @@ async def get_user_job_history(
         .offset(offset)
     )
     jobs = result.scalars().all()
-    
+
     return {
         "jobs": [
             {

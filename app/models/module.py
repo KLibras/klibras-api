@@ -19,13 +19,15 @@ class Module(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(50), nullable=False)
-    
+
     signs: Mapped[List["Sign"]] = relationship(
+        "Sign",
         secondary=module_sign_association,
         back_populates="modules"
     )
-    
+
     completed_by_users: Mapped[List["User"]] = relationship(
+        "User",
         secondary="user_module_association",
         back_populates="completed_modules"
     )

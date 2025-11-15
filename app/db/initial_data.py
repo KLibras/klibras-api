@@ -49,16 +49,22 @@ async def create_initial_data(db: AsyncSession):
             pontos=15
         )
 
-        db.add_all([sign_obrigado, sign_bom_dia, sign_tudo_bem, sign_qual_seu_nome])
+        db.add_all([sign_obrigado, sign_tudo_bem, sign_qual_seu_nome, sign_bom_dia])
         await db.flush()
 
         module_cumprimentos = Module(
             name="introducao",
             signs=[sign_obrigado, sign_tudo_bem, sign_qual_seu_nome, sign_bom_dia]
         )
+
+        module_em_preparacao = Module(
+            name="em_preparação",
+            signs=[]
+        )
         
         db.add(module_cumprimentos)
-        
+        db.add(module_em_preparacao)
+
         await db.commit()
         logger.info("Dados iniciais criados com sucesso! 🌱")
 
