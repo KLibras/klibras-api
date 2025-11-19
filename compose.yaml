@@ -54,8 +54,7 @@ services:
       ACCESS_TOKEN_LIFETIME: 30
       LONG_REFRESH_TOKEN_LIFETIME: 10080
       SHORT_REFRESH_TOKEN_LIFETIME: 1440
-      GOOGLE_CLIENT_ID: 179236694177-48ea7egbntsa83pr0mv8qd4l8va5c4jn.apps.googleusercontent.com
-
+      GOOGLE_CLIENT_ID: your-google_id
   worker:
     build: .
     container_name: klibras_worker
@@ -76,8 +75,8 @@ services:
       ACCESS_TOKEN_LIFETIME: 30
       LONG_REFRESH_TOKEN_LIFETIME: 10080
       SHORT_REFRESH_TOKEN_LIFETIME: 1440
-      GOOGLE_CLIENT_ID: 179236694177-48ea7egbntsa83pr0mv8qd4l8va5c4jn.apps.googleusercontent.com
-    command: python -m app.core.worker
+      GOOGLE_CLIENT_ID: your-google_id
+      command: python -m app.core.worker
 
 volumes:
   db_data:
