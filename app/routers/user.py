@@ -31,8 +31,7 @@ from app.core.security import (
 )
 from app.core.config import settings
 from app.models.user import User
-from app.models.sign import Sign
-from app.models.module import Module
+
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -117,22 +116,22 @@ async def register(
     """
     logger.info("Solicitação de registro para o e-mail: %s", user_in.email)
 
-    usuario_existente = await user_service.get_user_by_email_or_username(
+    registered_user = await user_service.get_user_by_email_or_username(
         db, email=user_in.email, username=user_in.username
     )
     
-    if usuario_existente is not None: 
+    if registered_user is not None: 
         logger.warning(f"O registro falhou para {user_in.email}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
 
-    usuario = await user_service.register_user(db=db, user_in=user_in)
+    user = await user_service.register_user(db=db, user_in=user_in)
  
-    if usuario is None:
+    if user is None:
         logger.error("A criação de usuário falhou inesperadamente para %s.", user_in.email)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Falha ao criar usuário.")
     
-    logger.info("Usuário %s registrado com sucesso. E-mail de boas-vindas na fila.", usuario.email)
-    return usuario
+    logger.info("Usuário %s registrado com sucesso. E-mail de boas-vindas na fila.", user.email)
+    return user
 
 
 @router.post("/login", response_model=Token)
@@ -145,10 +144,10 @@ async def login(
     Autentica um usuário e retorna os tokens de acesso e de atualização (refresh) JWT no corpo da resposta.
     """
     logger.info("Tentativa de login para o usuário: %s", form_data.username)
-    usuario = await user_service.authenticate_user(
+    user = await user_service.authenticate_user(
         db, email=form_data.username, password=form_data.password
     )
-    if not usuario:
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="E-mail ou senha incorretos",
@@ -156,12 +155,12 @@ async def login(
         )
 
     lembrar_me = request.query_params.get("rememberMe", "false").lower() == "true"
-    access_token = create_access_token(data={"sub": str(usuario.email)})
+    access_token = create_access_token(data={"sub": str(user.email)})
     refresh_token = create_refresh_token(
-        data={"sub": str(usuario.email)}, remember_me=lembrar_me
+        data={"sub": str(user.email)}, remember_me=lembrar_me
     )
 
-    logger.info("Login bem-sucedido para o usuário: %s", usuario.email)
+    logger.info("Login bem-sucedido para o usuário: %s", user.email)
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
@@ -189,15 +188,15 @@ async def refresh_token(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Token de atualização inválido"
         )
 
-    usuario = await user_service.get_user_by_email(db, email=email)
-    if not usuario:
+    user = await user_service.get_user_by_email(db, email=email)
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuário associado ao token não encontrado.",
         )
 
-    novo_access_token = create_access_token(data={"sub": str(usuario.email)})
-    logger.info("Novo token de acesso emitido para o usuário %s via token de atualização.", usuario.email)
+    novo_access_token = create_access_token(data={"sub": str(user.email)})
+    logger.info("Novo token de acesso emitido para o usuário %s via token de atualização.", user.email)
     return {
         "access_token": novo_access_token,
         "refresh_token": refresh_token, 
